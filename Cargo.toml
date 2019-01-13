@@ -1,0 +1,7 @@
+[package]
+name = "interpreter"
+version = "0.1.0"
+authors = ["ishanjain28 <ishanjain28@gmail.com>"]
+
+[dependencies]
+lazy_static = "1.2.0"
