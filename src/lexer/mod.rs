@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::str;
+use std::iter::Peekable;
+use std::str::{self, Chars};
 
 lazy_static! {
     static ref IDENTMAP: HashMap<&'static str, Token> = {
@@ -53,106 +54,118 @@ pub enum Token {
 }
 
 #[derive(Debug)]
-pub struct Lexer {
-    input: Vec<u8>,
-    position: usize,
-    read_position: usize,
-    ch: u8,
+pub struct Lexer<'a> {
+    input: Peekable<Chars<'a>>,
+    eof_sent: bool,
 }
 
-impl Lexer {
-    pub fn new(input: &str) -> Lexer {
+impl<'a> Lexer<'a> {
+    pub fn new(input: &'a str) -> Lexer<'a> {
+        let input = input.chars().peekable();
         Lexer {
-            input: input.bytes().collect::<Vec<u8>>(),
-            position: 0,
-            read_position: 0,
-            ch: 0,
+            input,
+            eof_sent: false,
         }
     }
 
-    fn read_char(&mut self) {
-        if self.read_position == self.input.len() {
-            self.ch = 0;
-        } else if self.read_position > self.input.len() {
-            // 3 = ETX
-            self.ch = 3;
-        } else {
-            self.ch = self.input[self.read_position];
-        }
-
-        self.position = self.read_position;
-        self.read_position += 1;
+    fn read_char(&mut self) -> Option<char> {
+        self.input.next()
     }
 
-    fn read_identifier(&mut self) -> String {
-        let pos = self.position;
-        while is_letter(self.ch) {
-            self.read_char();
+    fn read_identifier(&mut self, first: char) -> String {
+        let mut ident = Vec::new();
+        ident.push(first);
+
+        while self.peek_is_letter() {
+            ident.push(self.read_char().unwrap());
         }
-        self.read_position -= 1;
-        String::from_utf8_lossy(&self.input[pos..self.position]).to_string()
+
+        ident.into_iter().collect::<String>()
+    }
+
+    fn peek_is_letter(&mut self) -> bool {
+        match self.input.peek() {
+            Some(v) => is_letter(v),
+            None => false,
+        }
+    }
+    fn peek_is_ascii_digit(&mut self) -> bool {
+        match self.input.peek() {
+            Some(v) => v.is_ascii_digit(),
+            None => false,
+        }
     }
 
     fn skip_whitespace(&mut self) {
-        while self.ch == b' ' || self.ch == b'\t' || self.ch == b'\n' || self.ch == b'\r' {
-            self.read_char();
+        while let Some(&v) = self.input.peek() {
+            if v == ' ' || v == '\t' || v == '\n' || v == '\r' {
+                self.read_char();
+            } else {
+                break;
+            }
         }
     }
 
     // use i64 for all numbers for now.
-    fn read_number(&mut self) -> i64 {
-        let pos = self.position;
-        while self.ch.is_ascii_digit() {
-            self.read_char();
+    fn read_number(&mut self, first: char) -> i64 {
+        let mut number = Vec::new();
+        number.push(first);
+
+        while self.peek_is_ascii_digit() {
+            number.push(self.read_char().unwrap());
         }
-        self.read_position -= 1;
-        String::from_utf8_lossy(&self.input[pos..self.position])
+
+        number
+            .into_iter()
+            .collect::<String>()
             .parse::<i64>()
             .unwrap()
     }
 }
 
-impl Iterator for Lexer {
+impl<'a> Iterator for Lexer<'a> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.read_char();
         self.skip_whitespace();
+        let ch = self.read_char();
 
-        let v = match self.ch {
-            b'=' => Some(Token::Assign),
-            b'+' => Some(Token::Plus),
-            b'*' => Some(Token::Multiply),
-            b'/' => Some(Token::Divide),
-            b'-' => Some(Token::Subtract),
-            b',' => Some(Token::Comma),
-            b';' => Some(Token::Semicolon),
-            b'(' => Some(Token::LParen),
-            b')' => Some(Token::RParen),
-            b'{' => Some(Token::LBrace),
-            b'}' => Some(Token::RBrace),
-            b'!' => Some(Token::ExclamationMark),
-            b'>' => Some(Token::GreaterThan),
-            b'<' => Some(Token::LessThan),
-            0 => Some(Token::EOF),
-            //ETX-> End of text. It's the value of self.ch after all the text is parsed.
-            3 => None,
-            _ if is_letter(self.ch) => {
-                let ident = self.read_identifier();
+        let v = match ch {
+            Some('=') => Some(Token::Assign),
+            Some('+') => Some(Token::Plus),
+            Some('*') => Some(Token::Multiply),
+            Some('/') => Some(Token::Divide),
+            Some('-') => Some(Token::Subtract),
+            Some(',') => Some(Token::Comma),
+            Some(';') => Some(Token::Semicolon),
+            Some('(') => Some(Token::LParen),
+            Some(')') => Some(Token::RParen),
+            Some('{') => Some(Token::LBrace),
+            Some('}') => Some(Token::RBrace),
+            Some('!') => Some(Token::ExclamationMark),
+            Some('>') => Some(Token::GreaterThan),
+            Some('<') => Some(Token::LessThan),
+            Some(ch @ _) if is_letter(&ch) => {
+                let ident = self.read_identifier(ch);
                 Some(lookup_ident(&ident))
             }
-            _ if self.ch.is_ascii_digit() => {
-                let number = self.read_number();
+            Some(ch @ _) if ch.is_ascii_digit() => {
+                let number = self.read_number(ch);
                 Some(Token::Int(number))
             }
+            None if !self.eof_sent => {
+                self.eof_sent = true;
+                Some(Token::EOF)
+            }
+            None => None,
             _ => Some(Token::Illegal),
         };
         v
     }
 }
 
-fn is_letter(c: u8) -> bool {
-    c.is_ascii_alphabetic() || c == b'_'
+fn is_letter(c: &char) -> bool {
+    c.is_ascii_alphabetic() || c == &'_'
 }
 
 fn lookup_ident(ident: &str) -> Token {

@@ -134,11 +134,11 @@ mod tests {
 
         for (k, v) in tests {
             let tokenized_output = Lexer::new(k).collect::<Vec<Token>>();
-            //            assert_eq!(v.len(), tokenized_output.len());
+//            assert_eq!(v.len(), tokenized_output.len());
 
             for (exp, actual) in v.into_iter().zip(tokenized_output) {
                 if actual != exp {
-                    println!("Expect: {:?}, Actual: {:?}", actual, exp);
+                    println!("Expect: {:?}, Actual: {:?}", exp, actual);
                 }
                 assert_eq!(actual, exp);
             }
