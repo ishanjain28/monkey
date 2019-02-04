@@ -16,6 +16,8 @@ mod tests {
             Token::Plus,
             Token::LParen,
             Token::RParen,
+            Token::LBrace,
+            Token::RBrace,
             Token::Comma,
             Token::Semicolon,
             Token::EOF,
@@ -23,12 +25,11 @@ mod tests {
 
         let tokenized_output = Lexer::new(input).collect::<Vec<Token>>();
 
-        println!("{:?}", tokenized_output);
         assert_eq!(expected.len(), tokenized_output.len());
+        println!("{:?}", tokenized_output);
 
         for (exp, actual) in expected.into_iter().zip(tokenized_output) {
             assert_eq!(actual, exp);
-            println!("{:?} {:?}", actual, exp);
         }
     }
 }

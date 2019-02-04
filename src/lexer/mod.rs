@@ -94,6 +94,7 @@ impl Iterator for Lexer {
             ')' => Some(Token::RParen),
             '[' => Some(Token::LBrace),
             ']' => Some(Token::RBrace),
+            '0' => Some(Token::EOF),
             _ => None,
         }
     }
