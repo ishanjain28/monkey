@@ -33,6 +33,8 @@ pub enum Token {
     ExclamationMark,
     LessThan,
     GreaterThan,
+    Equals,
+    NotEquals,
 
     // Delimiter
     Comma,
@@ -75,11 +77,9 @@ impl<'a> Lexer<'a> {
     fn read_identifier(&mut self, first: char) -> String {
         let mut ident = Vec::new();
         ident.push(first);
-
         while self.peek_is_letter() {
             ident.push(self.read_char().unwrap());
         }
-
         ident.into_iter().collect::<String>()
     }
 
@@ -110,11 +110,9 @@ impl<'a> Lexer<'a> {
     fn read_number(&mut self, first: char) -> i64 {
         let mut number = Vec::new();
         number.push(first);
-
         while self.peek_is_ascii_digit() {
             number.push(self.read_char().unwrap());
         }
-
         number
             .into_iter()
             .collect::<String>()
@@ -131,7 +129,18 @@ impl<'a> Iterator for Lexer<'a> {
         let ch = self.read_char();
 
         let v = match ch {
-            Some('=') => Some(Token::Assign),
+            Some('=') => {
+                let is_e = match self.input.peek() {
+                    Some(v) if *v == '=' => true,
+                    _ => false,
+                };
+                if is_e {
+                    self.read_char();
+                    Some(Token::Equals)
+                } else {
+                    Some(Token::Assign)
+                }
+            }
             Some('+') => Some(Token::Plus),
             Some('*') => Some(Token::Multiply),
             Some('/') => Some(Token::Divide),
@@ -142,7 +151,18 @@ impl<'a> Iterator for Lexer<'a> {
             Some(')') => Some(Token::RParen),
             Some('{') => Some(Token::LBrace),
             Some('}') => Some(Token::RBrace),
-            Some('!') => Some(Token::ExclamationMark),
+            Some('!') => {
+                let is_ne = match self.input.peek() {
+                    Some(v) if *v == '=' => true,
+                    _ => false,
+                };
+                if is_ne {
+                    self.read_char();
+                    Some(Token::NotEquals)
+                } else {
+                    Some(Token::ExclamationMark)
+                }
+            }
             Some('>') => Some(Token::GreaterThan),
             Some('<') => Some(Token::LessThan),
             Some(ch @ _) if is_letter(&ch) => {
@@ -165,7 +185,7 @@ impl<'a> Iterator for Lexer<'a> {
 }
 
 fn is_letter(c: &char) -> bool {
-    c.is_ascii_alphabetic() || c == &'_'
+    c.is_ascii_alphabetic() || *c == '_'
 }
 
 fn lookup_ident(ident: &str) -> Token {

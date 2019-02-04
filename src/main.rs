@@ -87,6 +87,10 @@ mod tests {
         } else {
             return false;
         }
+
+        10 == 10;
+        9 != 10;
+
         ",
             vec![
                 Token::Let,
@@ -128,13 +132,21 @@ mod tests {
                 Token::False,
                 Token::Semicolon,
                 Token::RBrace,
+                Token::Int(10),
+                Token::Equals,
+                Token::Int(10),
+                Token::Semicolon,
+                Token::Int(9),
+                Token::NotEquals,
+                Token::Int(10),
+                Token::Semicolon,
                 Token::EOF,
             ],
         );
 
         for (k, v) in tests {
             let tokenized_output = Lexer::new(k).collect::<Vec<Token>>();
-//            assert_eq!(v.len(), tokenized_output.len());
+            assert_eq!(v.len(), tokenized_output.len());
 
             for (exp, actual) in v.into_iter().zip(tokenized_output) {
                 if actual != exp {
