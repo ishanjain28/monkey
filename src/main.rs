@@ -2,8 +2,11 @@
 extern crate lazy_static;
 
 mod lexer;
+mod repl;
 
-fn main() {}
+fn main() {
+    repl::init();
+}
 
 #[cfg(test)]
 mod tests {
