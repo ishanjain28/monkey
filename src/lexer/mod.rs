@@ -55,7 +55,7 @@ pub enum Token {
     Ident(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Lexer<'a> {
     input: Peekable<Chars<'a>>,
     eof_sent: bool,
@@ -85,7 +85,7 @@ impl<'a> Lexer<'a> {
 
     fn peek_is_letter(&mut self) -> bool {
         match self.input.peek() {
-            Some(v) => is_letter(v),
+            Some(v) => is_letter(*v),
             None => false,
         }
     }
@@ -128,7 +128,7 @@ impl<'a> Iterator for Lexer<'a> {
         self.skip_whitespace();
         let ch = self.read_char();
 
-        let v = match ch {
+        match ch {
             Some('=') => {
                 let is_e = match self.input.peek() {
                     Some(v) if *v == '=' => true,
@@ -165,11 +165,11 @@ impl<'a> Iterator for Lexer<'a> {
             }
             Some('>') => Some(Token::GreaterThan),
             Some('<') => Some(Token::LessThan),
-            Some(ch @ _) if is_letter(&ch) => {
+            Some(ch) if is_letter(ch) => {
                 let ident = self.read_identifier(ch);
                 Some(lookup_ident(&ident))
             }
-            Some(ch @ _) if ch.is_ascii_digit() => {
+            Some(ch) if ch.is_ascii_digit() => {
                 let number = self.read_number(ch);
                 Some(Token::Int(number))
             }
@@ -179,18 +179,170 @@ impl<'a> Iterator for Lexer<'a> {
             }
             None => None,
             _ => Some(Token::Illegal),
-        };
-        v
+        }
     }
 }
 
-fn is_letter(c: &char) -> bool {
-    c.is_ascii_alphabetic() || *c == '_'
+fn is_letter(c: char) -> bool {
+    c.is_ascii_alphabetic() || c == '_'
 }
 
 fn lookup_ident(ident: &str) -> Token {
     match IDENTMAP.get(ident) {
         Some(v) => v.clone(),
         None => Token::Ident(ident.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Lexer, Token};
+    use std::collections::HashMap;
+
+    #[test]
+    fn new_token() {
+        let mut tests = HashMap::new();
+
+        tests.insert(
+            "=+(){},;",
+            vec![
+                Token::Assign,
+                Token::Plus,
+                Token::LParen,
+                Token::RParen,
+                Token::LBrace,
+                Token::RBrace,
+                Token::Comma,
+                Token::Semicolon,
+                Token::EOF,
+            ],
+        );
+        tests.insert(
+            "let five = 5;
+            let ten = 10;
+
+        let add = fn(x, y) {
+            x + y;
+        };
+
+        let result = add(five, ten);",
+            vec![
+                Token::Let,
+                Token::Ident("five".to_string()),
+                Token::Assign,
+                Token::Int(5),
+                Token::Semicolon,
+                Token::Let,
+                Token::Ident("ten".to_string()),
+                Token::Assign,
+                Token::Int(10),
+                Token::Semicolon,
+                Token::Let,
+                Token::Ident("add".to_string()),
+                Token::Assign,
+                Token::Function,
+                Token::LParen,
+                Token::Ident("x".to_string()),
+                Token::Comma,
+                Token::Ident("y".to_string()),
+                Token::RParen,
+                Token::LBrace,
+                Token::Ident("x".to_string()),
+                Token::Plus,
+                Token::Ident("y".to_string()),
+                Token::Semicolon,
+                Token::RBrace,
+                Token::Semicolon,
+                Token::Let,
+                Token::Ident("result".to_string()),
+                Token::Assign,
+                Token::Ident("add".to_string()),
+                Token::LParen,
+                Token::Ident("five".to_string()),
+                Token::Comma,
+                Token::Ident("ten".to_string()),
+                Token::RParen,
+                Token::Semicolon,
+                Token::EOF,
+            ],
+        );
+        tests.insert(
+            "let result = add(five, ten);
+        !-/*5;
+        5 < 10 > 5;
+
+        if(5 < 10) {
+            return true;
+        } else {
+            return false;
+        }
+
+        10 == 10;
+        9 != 10;
+
+        ",
+            vec![
+                Token::Let,
+                Token::Ident("result".to_string()),
+                Token::Assign,
+                Token::Ident("add".to_string()),
+                Token::LParen,
+                Token::Ident("five".to_string()),
+                Token::Comma,
+                Token::Ident("ten".to_string()),
+                Token::RParen,
+                Token::Semicolon,
+                Token::ExclamationMark,
+                Token::Subtract,
+                Token::Divide,
+                Token::Multiply,
+                Token::Int(5),
+                Token::Semicolon,
+                Token::Int(5),
+                Token::LessThan,
+                Token::Int(10),
+                Token::GreaterThan,
+                Token::Int(5),
+                Token::Semicolon,
+                Token::If,
+                Token::LParen,
+                Token::Int(5),
+                Token::LessThan,
+                Token::Int(10),
+                Token::RParen,
+                Token::LBrace,
+                Token::Return,
+                Token::True,
+                Token::Semicolon,
+                Token::RBrace,
+                Token::Else,
+                Token::LBrace,
+                Token::Return,
+                Token::False,
+                Token::Semicolon,
+                Token::RBrace,
+                Token::Int(10),
+                Token::Equals,
+                Token::Int(10),
+                Token::Semicolon,
+                Token::Int(9),
+                Token::NotEquals,
+                Token::Int(10),
+                Token::Semicolon,
+                Token::EOF,
+            ],
+        );
+
+        for (k, v) in tests {
+            let tokenized_output = Lexer::new(k).collect::<Vec<Token>>();
+            assert_eq!(v.len(), tokenized_output.len());
+
+            for (exp, actual) in v.into_iter().zip(tokenized_output) {
+                if actual != exp {
+                    println!("Expect: {:?}, Actual: {:?}", exp, actual);
+                }
+                assert_eq!(actual, exp);
+            }
+        }
     }
 }
