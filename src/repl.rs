@@ -1,4 +1,4 @@
-use crate::{lexer::Lexer, parser::Parser};
+use crate::{lexer::Lexer, parser::Program};
 use std::io::{self, BufRead, Write};
 
 const PROMPT: &'static str = ">> ";
@@ -24,6 +24,6 @@ fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
             println!("{:?}", token);
         }
 
-        let parser = Parser::new(tokens);
+        let parser = Program::parse(tokens);
     }
 }
