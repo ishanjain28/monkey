@@ -1,49 +1,41 @@
-mod ast;
+pub mod ast;
+mod program;
 
-use self::ast::{Let, Statement};
-use super::lexer::Lexer;
+pub use self::program::Program;
 
-pub struct Program {
-    statements: Vec<Box<dyn Statement>>,
-}
+use self::ast::{LetStatement, Statement};
+use crate::lexer::{Lexer, Token};
 
-impl Program {
-    pub fn token_literal(&self) -> String {
-        if self.statements.len() > 0 {
-            self.statements[0].token_literal()
-        } else {
-            "".to_owned()
+struct Parser {}
+
+impl Parser {
+    fn parse_statement(token: Token, lexer: &mut Lexer) -> Option<Box<dyn ast::Statement>> {
+        match token {
+            Token::Let => Some(Box::new(LetStatement::parse(lexer))),
+            _ => unimplemented!(),
         }
-    }
-
-    pub fn parse(lexer: Lexer) -> Program {
-        let mut statements = vec![];
-
-        Program { statements }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::lexer::Lexer;
-    use crate::parser::Program;
+#[derive(Debug)]
+struct ParserError {
+    desc: String,
+}
 
-    #[test]
-    fn let_statements() {
-        let ip = "
-        let yr = 5;
-        let qq = 10;
-        let foobar = 8388383;
-        ";
+impl std::fmt::Display for ParserError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "ParserError: ")
+    }
+}
 
-        let lexer = Lexer::new(ip);
-        let ast_tree = Program::parse(lexer);
+impl std::error::Error for ParserError {
+    fn description(&self) -> &str {
+        &self.desc
+    }
+}
 
-        if ast_tree.statements.len() != 3 {
-            eprintln!(
-                "statements length not equal to 3. got {}",
-                ast_tree.statements
-            );
-        }
+impl ParserError {
+    fn new(desc: String) -> ParserError {
+        ParserError { desc }
     }
 }

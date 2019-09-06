@@ -14,7 +14,7 @@ pub fn init() {
 
 fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
     loop {
-        out.write_fmt(format_args!("{}", PROMPT)).unwrap();
+        out.write(PROMPT.as_bytes()).unwrap();
         out.flush().unwrap();
         let mut s = String::new();
         ip.read_line(&mut s).unwrap();
