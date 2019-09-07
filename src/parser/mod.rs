@@ -3,7 +3,7 @@ mod program;
 
 pub use self::program::Program;
 
-use self::ast::{LetStatement, Statement, StatementType};
+use self::ast::{LetStatement, StatementType};
 use crate::lexer::{Lexer, Token};
 use std::iter::Peekable;
 
@@ -27,17 +27,14 @@ impl<'a> Parser<'a> {
                     Err(_) => None, //TODO: Return appropriate error
                 }
             }
-            n @ _ => {
-                println!("{:?}", n);
-                None
-            }
+            _ => None,
         }
     }
 
     fn expect_peek(&mut self, token: Token) -> bool {
         if let Some(v) = self.lexer.peek() {
             if v == &token {
-                self.lexer.next();
+                self.current_token = self.lexer.next();
                 true
             } else {
                 false
@@ -53,7 +50,7 @@ impl<'a> Parser<'a> {
 }
 
 #[derive(Debug)]
-struct ParseError {
+pub struct ParseError {
     desc: String,
 }
 

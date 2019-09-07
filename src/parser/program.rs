@@ -1,5 +1,5 @@
 use crate::lexer::{Lexer, Token};
-use crate::parser::ast::{Statement, StatementType};
+use crate::parser::ast::StatementType;
 use crate::parser::Parser;
 
 #[derive(Debug)]
@@ -13,7 +13,7 @@ impl Program {
         let mut parser = Parser::new(lexer);
         loop {
             if let Some(token) = parser.lexer.next() {
-                if token == Token::EOF {
+                if parser.current_token_is(Token::EOF) {
                     break;
                 }
 
@@ -53,14 +53,12 @@ mod tests {
         let lexer = Lexer::new(ip);
         let ast_tree = Program::parse(lexer);
 
-        println!("{:?}", ast_tree);
         if ast_tree.statements.len() != 3 {
             assert_eq!(ast_tree.statements.len(), 3);
         }
 
         for (out, expected_out) in ast_tree.statements.iter().zip(out.statements.iter()) {
             assert_eq!(out, expected_out);
-            println!("out={:?}, expected_out={:?}", out, expected_out);
         }
     }
 }

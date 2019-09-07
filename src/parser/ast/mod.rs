@@ -1,6 +1,5 @@
-use super::ParseError;
 use crate::lexer::Token;
-use crate::parser::Parser;
+use crate::parser::{ParseError, Parser};
 use std::error::Error;
 
 pub enum Node {
@@ -12,15 +11,6 @@ pub enum Node {
 pub enum StatementType {
     Let(LetStatement),
     Ident(Identifier),
-}
-
-pub trait Statement {
-    fn parse(&mut Parser) -> Result<StatementType, Box<dyn Error>>
-    where
-        Self: Sized;
-    fn new() -> StatementType
-    where
-        Self: Sized;
 }
 
 #[derive(Debug, PartialEq)]
