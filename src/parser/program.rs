@@ -1,5 +1,5 @@
 use crate::lexer::{Lexer, Token};
-use crate::parser::ast::{LetStatement, Statement};
+use crate::parser::ast::Statement;
 use crate::parser::Parser;
 
 pub struct Program {
@@ -7,24 +7,16 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn token_literal(&self) -> &'static str {
-        if self.statements.len() > 0 {
-            self.statements[0].token_literal()
-        } else {
-            ""
-        }
-    }
-
-    pub fn parse(mut lexer: Lexer) -> Program {
+    pub fn parse(lexer: Lexer) -> Program {
         let mut statements = vec![];
-
+        let mut parser = Parser::new(lexer);
         loop {
-            if let Some(token) = lexer.next() {
+            if let Some(token) = parser.lexer.next() {
                 if token == Token::EOF {
                     break;
                 }
 
-                if let Some(stmt) = Parser::parse_statement(token, &mut lexer) {
+                if let Some(stmt) = parser.parse_statement(token) {
                     statements.push(stmt);
                 } else {
                     continue;
@@ -41,8 +33,8 @@ impl Program {
 #[cfg(test)]
 mod tests {
     use crate::lexer::Lexer;
+    use crate::parser::ast::{Identifier, LetStatement};
     use crate::parser::Program;
-
     #[test]
     fn let_statements() {
         let ip = "
@@ -50,12 +42,21 @@ mod tests {
         let qq = 10;
         let foobar = 8388383;
         ";
-
+        let out = Program {
+            statements: vec![
+                Box::new(LetStatement::new(Identifier::new("yr"))),
+                Box::new(LetStatement::new(Identifier::new("qq"))),
+                Box::new(LetStatement::new(Identifier::new("foobar"))),
+            ],
+        };
         let lexer = Lexer::new(ip);
         let ast_tree = Program::parse(lexer);
 
         if ast_tree.statements.len() != 3 {
             assert_eq!(ast_tree.statements.len(), 3);
+        }
+        for (out, expected_out) in ast_tree.statements.iter().zip(out.statements.iter()) {
+            //     assert!(out, expected_out);
         }
     }
 }
