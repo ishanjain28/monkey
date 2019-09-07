@@ -3,47 +3,39 @@ use crate::lexer::Token;
 use crate::parser::Parser;
 use std::error::Error;
 
-pub trait Node {
-    fn token_literal(&self) -> &'static str;
-    fn validate(&self) -> Result<(), Box<dyn Error>>;
+pub enum Node {
+    Statement(StatementType),
+    Expression,
 }
 
-pub(crate) trait Statement: Node {
-    fn parse(&mut Parser) -> Result<Self, Box<dyn Error>>
+#[derive(PartialEq, Debug)]
+pub enum StatementType {
+    Let(LetStatement),
+    Ident(Identifier),
+}
+
+pub trait Statement {
+    fn parse(&mut Parser) -> Result<StatementType, Box<dyn Error>>
+    where
+        Self: Sized;
+    fn new() -> StatementType
     where
         Self: Sized;
 }
 
-pub trait Expression: Node {}
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct LetStatement {
     name: Identifier,
     // value: dyn Expression,
 }
 
 impl LetStatement {
-    pub fn new(identifier: Identifier) -> LetStatement {
-        LetStatement { name: identifier }
-    }
-}
-impl Node for LetStatement {
-    fn validate(&self) -> Result<(), Box<dyn Error>> {
-        if self.token_literal() != "let" {
-            return Err(Box::new(ParseError::new(
-                &("self.token_literal is not set, got=".to_owned() + self.token_literal()),
-            )));
-        }
-        Ok(())
+    #[allow(dead_code)]
+    pub fn new(identifier: Identifier) -> StatementType {
+        StatementType::Let(LetStatement { name: identifier })
     }
 
-    fn token_literal(&self) -> &'static str {
-        "let"
-    }
-}
-
-impl Statement for LetStatement {
-    fn parse(parser: &mut Parser) -> Result<LetStatement, Box<dyn Error>> {
+    pub fn parse(parser: &mut Parser) -> Result<LetStatement, Box<dyn Error>> {
         let name;
         //TODO: Add expression parser
         match parser.lexer.next() {
@@ -67,35 +59,25 @@ impl Statement for LetStatement {
             return Err(Box::new(ParseError::new("expected =, Could not find it")));
         }
 
+        // TODO: Replace this with code to parse expressions correctly
         while !parser.current_token_is(Token::Semicolon) {
-            println!("prev_token={:?}", parser.current_token);
             parser.current_token = parser.lexer.next();
-            println!("current_token={:?}", parser.current_token);
         }
 
         Ok(LetStatement { name })
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Identifier {
     name: String,
 }
 
 impl Identifier {
+    #[allow(dead_code)]
     pub fn new(name: &str) -> Identifier {
         Identifier {
             name: name.to_owned(),
         }
     }
 }
-impl Node for Identifier {
-    fn validate(&self) -> Result<(), Box<dyn Error>> {
-        Ok(())
-    }
-    fn token_literal(&self) -> &'static str {
-        "IDENT"
-    }
-}
-
-impl Expression for Identifier {}

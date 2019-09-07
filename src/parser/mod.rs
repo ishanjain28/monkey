@@ -3,11 +3,11 @@ mod program;
 
 pub use self::program::Program;
 
-use self::ast::{LetStatement, Statement};
+use self::ast::{LetStatement, Statement, StatementType};
 use crate::lexer::{Lexer, Token};
 use std::iter::Peekable;
 
-pub(crate) struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
     current_token: Option<Token>,
 }
@@ -19,15 +19,13 @@ impl<'a> Parser<'a> {
             current_token: None,
         }
     }
-    fn parse_statement(&mut self, token: Token) -> Option<Box<dyn ast::Statement>> {
+    fn parse_statement(&mut self, token: Token) -> Option<ast::StatementType> {
         match token {
             Token::Let => {
-                let stmt = match LetStatement::parse(self) {
-                    Ok(v) => v,
-                    Err(_) => return None, //TODO: Return appropriate error
-                };
-
-                Some(Box::new(stmt))
+                match LetStatement::parse(self) {
+                    Ok(v) => Some(StatementType::Let(v)),
+                    Err(_) => None, //TODO: Return appropriate error
+                }
             }
             n @ _ => {
                 println!("{:?}", n);
