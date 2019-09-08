@@ -89,7 +89,7 @@ impl<'a> Lexer<'a> {
             None => false,
         }
     }
-    
+
     fn peek_is_ascii_digit(&mut self) -> bool {
         match self.input.peek() {
             Some(v) => v.is_ascii_digit(),

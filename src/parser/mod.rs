@@ -3,7 +3,7 @@ mod program;
 
 pub use self::program::Program;
 
-use self::ast::{LetStatement, StatementType};
+use self::ast::{Let, Return, Statement};
 use crate::lexer::{Lexer, Token};
 use std::iter::Peekable;
 
@@ -19,28 +19,31 @@ impl<'a> Parser<'a> {
             current_token: None,
         }
     }
-    fn parse_statement(&mut self, token: Token) -> Option<ast::StatementType> {
+    fn parse_statement(&mut self, token: Token) -> Result<Box<dyn ast::Statement>, ParseError> {
         match token {
-            Token::Let => {
-                match LetStatement::parse(self) {
-                    Ok(v) => Some(StatementType::Let(v)),
-                    Err(_) => None, //TODO: Return appropriate error
-                }
+            Token::Let => match Let::parse(self) {
+                Ok(v) => Ok(Box::new(v)),
+                Err(e) => Err(e), //TODO: Return appropriate error
+            },
+            Token::Return => match Return::parse(self) {
+                Ok(v) => Ok(Box::new(v)),
+                Err(e) => Err(e),
+            },
+            n @ _ => {
+                println!("{:?}", n);
+                unimplemented!();
             }
-            _ => None,
         }
     }
 
     fn expect_peek(&mut self, token: Token) -> bool {
-        if let Some(v) = self.lexer.peek() {
-            if v == &token {
+        match self.lexer.peek() {
+            Some(v) if v == &token => {
                 self.current_token = self.lexer.next();
                 true
-            } else {
-                false
             }
-        } else {
-            false
+            Some(v) => false,
+            None => false,
         }
     }
 
