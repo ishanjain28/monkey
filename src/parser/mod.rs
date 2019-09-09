@@ -19,14 +19,14 @@ impl<'a> Parser<'a> {
             current_token: None,
         }
     }
-    fn parse_statement(&mut self, token: Token) -> Result<Box<dyn ast::Statement>, ParseError> {
+    fn parse_statement(&mut self, token: Token) -> Result<Statement, ParseError> {
         match token {
             Token::Let => match Let::parse(self) {
-                Ok(v) => Ok(Box::new(v)),
+                Ok(v) => Ok(Statement::Let(v)),
                 Err(e) => Err(e), //TODO: Return appropriate error
             },
             Token::Return => match Return::parse(self) {
-                Ok(v) => Ok(Box::new(v)),
+                Ok(v) => Ok(Statement::Return(v)),
                 Err(e) => Err(e),
             },
             n @ _ => {
@@ -42,8 +42,7 @@ impl<'a> Parser<'a> {
                 self.current_token = self.lexer.next();
                 true
             }
-            Some(v) => false,
-            None => false,
+            Some(_) | None => false,
         }
     }
 

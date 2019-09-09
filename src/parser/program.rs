@@ -2,7 +2,7 @@ use crate::lexer::{Lexer, Token};
 use crate::parser::{ast::Statement, Parser};
 
 pub struct Program {
-    statements: Vec<Box<dyn Statement>>,
+    statements: Vec<Statement>,
 }
 
 impl Program {
@@ -36,7 +36,7 @@ mod tests {
     use crate::lexer::Lexer;
     use crate::parser::ast::{Identifier, Let, Statement};
     use crate::parser::Program;
-    use std::any::Any;
+
     #[test]
     fn let_statements() {
         let ip = "
@@ -46,9 +46,9 @@ mod tests {
         ";
 
         let expected_out = vec![
-            Box::new(Let::new(Identifier::new("yr"))),
-            Box::new(Let::new(Identifier::new("qq"))),
-            Box::new(Let::new(Identifier::new("foobar"))),
+            Statement::Let(Let::new(Identifier::new("yr"))),
+            Statement::Let(Let::new(Identifier::new("qq"))),
+            Statement::Let(Let::new(Identifier::new("foobar"))),
         ];
         let lexer = Lexer::new(ip);
         let as_tree = Program::parse(lexer);
@@ -56,14 +56,7 @@ mod tests {
         assert_eq!(as_tree.statements.len(), 3);
 
         for (out, expected_out) in as_tree.statements.into_iter().zip(expected_out.into_iter()) {
-            let out: Option<Let> =
-                if std::any::TypeId::of::<Let>() == std::any::TypeId::of::<dyn Statement>() {
-                    Some(unsafe { std::mem::transmute::<Box<dyn Statement>, Let>(out) })
-                } else {
-                    None
-                };
-
-            if Box::new(out.unwrap()) == expected_out {}
+            assert_eq!(out, expected_out);
         }
     }
 
