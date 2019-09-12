@@ -263,7 +263,7 @@ fn lookup_ident(ident: &str) -> Token {
 
 #[cfg(test)]
 mod tests {
-    use super::{Lexer, Literal, Token, TokenType};
+    use super::{Lexer, Token, TokenType};
     use std::collections::HashMap;
 
     #[test]

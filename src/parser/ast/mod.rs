@@ -33,7 +33,7 @@ impl Let {
         }
 
         let literal = String::try_from(parser.current_token.clone().unwrap().value.unwrap())?;
-        let name = Identifier::new(Token::new(TokenType::Let), &literal);
+        let name = Identifier::new(Token::new(TokenType::Let), literal.into());
 
         if !parser.expect_peek(Token::new(TokenType::Assign)) {
             return Err(ParseError::new("expected =, Could not find it"));
@@ -58,8 +58,8 @@ impl Return {
         Return {
             return_value: Expression::Ident(Identifier::new(
                 Token::new(TokenType::Return),
-                "return",
-            )), //TODO FIX THIS
+                "return".into(),
+            )),
         }
     }
 
@@ -72,6 +72,10 @@ impl Return {
     }
 }
 
+// Identifier is used to represent variable names and other user created identifiers.
+// `Literal` can be an int as well. So, Identifier can be a Integer Literal
+// The wording sounds a little confusing, maybe?
+// TODO: possible @refactor
 #[derive(Debug, PartialEq)]
 pub struct Identifier {
     name: Token,
@@ -79,11 +83,8 @@ pub struct Identifier {
 }
 
 impl Identifier {
-    pub fn new(token: Token, name: &str) -> Identifier {
-        Identifier {
-            name: token,
-            value: name.into(),
-        }
+    pub fn new(name: Token, value: Literal) -> Identifier {
+        Identifier { name, value }
     }
 }
 

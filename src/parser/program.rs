@@ -46,7 +46,7 @@ mod tests {
         let expected_out = Program {
             statements: vec![
                 Statement::Let(Let::new(
-                    Identifier::new(Token::new(TokenType::Let), "yr"),
+                    Identifier::new(Token::new(TokenType::Let), "yr".into()),
                     None
                     // Some(Expression::Ident(Identifier::new(
                     //     Token::new(TokenType::Let),
@@ -54,7 +54,7 @@ mod tests {
                     // ))),
                 )),
                 Statement::Let(Let::new(
-                    Identifier::new(Token::new(TokenType::Let), "qq"),
+                    Identifier::new(Token::new(TokenType::Let), "qq".into()),
                     None
                     // Some(Expression::Ident(Identifier::new(
                     //     Token::new(TokenType::Let),
@@ -62,7 +62,7 @@ mod tests {
                     // ))),
                 )),
                 Statement::Let(Let::new(
-                    Identifier::new(Token::new(TokenType::Let), "foobar"),
+                    Identifier::new(Token::new(TokenType::Let), "foobar".into()),
                     None
                     // Some(Expression::Ident(Identifier::new(
                     //     Token::new(TokenType::Let),
@@ -103,12 +103,32 @@ mod tests {
                 Some(Token::with_value(TokenType::Ident, "foobar".into())),
                 Expression::Ident(Identifier::new(
                     Token::with_value(TokenType::Ident, "foobar".into()),
-                    "foobar",
+                    "foobar".into(),
                 )),
             ))],
         };
 
         println!("{:?}", as_tree);
+        assert_eq!(as_tree.statements.len(), 1);
+        assert_eq!(as_tree, expected_out);
+    }
+
+    #[test]
+    fn integer_literal_expression() {
+        let ip = "5;";
+
+        let lexer = Lexer::new(ip);
+        let as_tree = Program::parse(lexer);
+        let expected_out = Program {
+            statements: vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                Some(Token::with_value(TokenType::Int, 5.into())),
+                Expression::Ident(Identifier::new(
+                    Token::with_value(TokenType::Int, 5.into()),
+                    5.into(),
+                )),
+            ))],
+        };
+
         assert_eq!(as_tree.statements.len(), 1);
         assert_eq!(as_tree, expected_out);
     }

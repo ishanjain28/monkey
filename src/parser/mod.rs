@@ -39,6 +39,7 @@ impl<'a> Parser<'a> {
             prefix_parse_fns,
         };
         parser.register_prefix_fn(TokenType::Ident, Parser::parse_identifier);
+        parser.register_prefix_fn(TokenType::Int, Parser::parse_integer_literal);
         parser
     }
 
@@ -59,7 +60,10 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_expression(&mut self, priority: ExpressionPriority) -> Result<Expression, ParseError> {
+    fn parse_expression(
+        &mut self,
+        _priority: ExpressionPriority,
+    ) -> Result<Expression, ParseError> {
         let current_token = if let Some(token) = &self.current_token {
             token
         } else {
@@ -83,7 +87,16 @@ impl<'a> Parser<'a> {
         let ct = parser.current_token.clone().unwrap();
         Ok(Expression::Ident(Identifier::new(
             ct.clone(), // TODO: Correction needed, Can be a source of subtle error in some cases
-            &String::try_from(ct.value.unwrap())?,
+            String::try_from(ct.value.unwrap())?.into(),
+        )))
+    }
+
+    fn parse_integer_literal(parser: &mut Parser) -> Result<Expression, ParseError> {
+        let v = parser.current_token.clone().unwrap();
+
+        Ok(Expression::Ident(Identifier::new(
+            v.clone(),
+            v.value.unwrap(),
         )))
     }
 
