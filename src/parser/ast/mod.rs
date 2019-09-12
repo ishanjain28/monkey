@@ -1,95 +1,114 @@
 use crate::{
-    lexer::Token,
-    parser::{ParseError, Parser},
+    lexer::{Literal, Token, TokenType},
+    parser::{ExpressionPriority, ParseError, Parser},
 };
+use std::convert::TryFrom;
 
 #[derive(Debug, PartialEq)]
 pub enum Statement {
     Let(Let),
-
     Return(Return),
-    //ExpressionStatement(ExpressionStatement),
+    ExpressionStatement(ExpressionStatement),
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     Ident(Identifier),
 }
+
 #[derive(Debug, PartialEq)]
 pub struct Let {
     name: Identifier,
-    // value: dyn Expression,
+    value: Option<Expression>,
 }
 
 impl Let {
-    #[allow(dead_code)]
-    pub fn new(identifier: Identifier) -> Let {
-        Let { name: identifier }
+    pub fn new(name: Identifier, value: Option<Expression>) -> Let {
+        Let { name, value }
     }
 
     pub fn parse(parser: &mut Parser) -> Result<Let, ParseError> {
-        let name;
+        if !parser.expect_peek(Token::new(TokenType::Ident)) {
+            return Err(ParseError::new("expected ident, Couldn't find it"));
+        }
 
-        //TODO: Add expression parser
-        match parser.lexer.next() {
-            Some(v) => match v {
-                Token::Ident(q) => name = Identifier { name: q },
-                n @ _ => {
-                    return Err(ParseError::new(&format!("expected IDENT, Found {:?}", n)));
-                }
-            },
-            None => {
-                return Err(ParseError::new(
-                    "expected IDENT after let, Could not find it",
-                ))
-            }
-        };
+        let literal = String::try_from(parser.current_token.clone().unwrap().value.unwrap())?;
+        let name = Identifier::new(Token::new(TokenType::Let), &literal);
 
-        if !parser.expect_peek(Token::Assign) {
+        if !parser.expect_peek(Token::new(TokenType::Assign)) {
             return Err(ParseError::new("expected =, Could not find it"));
         }
 
         // TODO: Replace this with code to parse expressions correctly
-        while !parser.current_token_is(Token::Semicolon) {
+        while !parser.current_token_is(Token::new(TokenType::Semicolon)) {
             parser.current_token = parser.lexer.next();
         }
 
-        Ok(Let { name })
+        Ok(Let::new(name, None))
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Expr;
-
-#[derive(Debug, PartialEq)]
 pub struct Return {
-    return_value: Expr,
+    return_value: Expression,
 }
 
 impl Return {
     pub fn new() -> Return {
-        Return { return_value: Expr }
+        Return {
+            return_value: Expression::Ident(Identifier::new(
+                Token::new(TokenType::Return),
+                "return",
+            )), //TODO FIX THIS
+        }
     }
 
     pub fn parse(parser: &mut Parser) -> Result<Return, ParseError> {
-        while !parser.current_token_is(Token::Semicolon) {
+        while !parser.current_token_is(Token::new(TokenType::Semicolon)) {
             parser.current_token = parser.lexer.next();
         }
 
-        Ok(Return { return_value: Expr })
+        Ok(Return::new())
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Identifier {
-    name: String,
+    name: Token,
+    value: Literal,
 }
 
 impl Identifier {
-    #[allow(dead_code)]
-    pub fn new(name: &str) -> Identifier {
+    pub fn new(token: Token, name: &str) -> Identifier {
         Identifier {
-            name: name.to_owned(),
+            name: token,
+            value: name.into(),
         }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ExpressionStatement {
+    token: Option<Token>, // The first token in Expression
+    expression: Expression,
+}
+
+impl ExpressionStatement {
+    #[allow(dead_code)]
+    pub fn new(token: Option<Token>, expression: Expression) -> Self {
+        ExpressionStatement { token, expression }
+    }
+
+    pub fn parse(parser: &mut Parser) -> Result<Self, ParseError> {
+        let ct = parser.current_token.clone();
+
+        let expr = parser.parse_expression(ExpressionPriority::Lowest)?;
+
+        let s = Token::new(TokenType::Semicolon);
+        if parser.peek_token_is(&s) {
+            parser.current_token = parser.lexer.next();
+        }
+
+        Ok(ExpressionStatement::new(ct, expr))
     }
 }

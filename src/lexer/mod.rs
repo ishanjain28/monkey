@@ -1,28 +1,29 @@
 use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::iter::Peekable;
 use std::str::{self, Chars};
 
 lazy_static! {
     static ref IDENTMAP: HashMap<&'static str, Token> = {
         let mut m = HashMap::new();
-        m.insert("fn", Token::Function);
-        m.insert("let", Token::Let);
-        m.insert("true", Token::True);
-        m.insert("false", Token::False);
-        m.insert("return", Token::Return);
-        m.insert("if", Token::If);
-        m.insert("else", Token::Else);
+        m.insert("fn", Token::new(TokenType::Function));
+        m.insert("let", Token::new(TokenType::Let));
+        m.insert("true", Token::new(TokenType::True));
+        m.insert("false", Token::new(TokenType::False));
+        m.insert("return", Token::new(TokenType::Return));
+        m.insert("if", Token::new(TokenType::If));
+        m.insert("else", Token::new(TokenType::Else));
         m
     };
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Token {
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub enum TokenType {
     Illegal,
     EOF,
 
     // Identifiers
-    Int(i64),
+    Int,
 
     // Operators
     Assign,
@@ -52,7 +53,72 @@ pub enum Token {
     Else,
     False,
     Return,
-    Ident(String),
+    Ident,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+pub struct Token {
+    pub name: TokenType,
+    pub value: Option<Literal>,
+}
+
+impl Token {
+    #[inline]
+    pub fn new(name: TokenType) -> Self {
+        Token { name, value: None }
+    }
+
+    #[inline]
+    pub fn with_value(name: TokenType, value: Literal) -> Self {
+        Token {
+            name,
+            value: Some(value),
+        }
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub enum Literal {
+    String(String),
+    Int(i64),
+}
+
+impl From<String> for Literal {
+    fn from(s: String) -> Literal {
+        Literal::String(s)
+    }
+}
+
+impl From<&str> for Literal {
+    fn from(s: &str) -> Literal {
+        Literal::String(s.to_owned())
+    }
+}
+
+impl From<i64> for Literal {
+    fn from(i: i64) -> Literal {
+        Literal::Int(i)
+    }
+}
+
+impl TryFrom<Literal> for String {
+    type Error = &'static str;
+    fn try_from(l: Literal) -> Result<String, Self::Error> {
+        match l {
+            Literal::String(v) => Ok(v),
+            Literal::Int(_) => Err("can not convert Int to String"),
+        }
+    }
+}
+
+impl TryFrom<Literal> for i64 {
+    type Error = &'static str;
+    fn try_from(l: Literal) -> Result<i64, Self::Error> {
+        match l {
+            Literal::Int(v) => Ok(v),
+            Literal::String(_) => Err("can not convert String to Int"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -137,21 +203,21 @@ impl<'a> Iterator for Lexer<'a> {
                 };
                 if is_e {
                     self.read_char();
-                    Some(Token::Equals)
+                    Some(Token::new(TokenType::Equals))
                 } else {
-                    Some(Token::Assign)
+                    Some(Token::new(TokenType::Assign))
                 }
             }
-            Some('+') => Some(Token::Plus),
-            Some('*') => Some(Token::Multiply),
-            Some('/') => Some(Token::Divide),
-            Some('-') => Some(Token::Subtract),
-            Some(',') => Some(Token::Comma),
-            Some(';') => Some(Token::Semicolon),
-            Some('(') => Some(Token::LParen),
-            Some(')') => Some(Token::RParen),
-            Some('{') => Some(Token::LBrace),
-            Some('}') => Some(Token::RBrace),
+            Some('+') => Some(Token::new(TokenType::Plus)),
+            Some('*') => Some(Token::new(TokenType::Multiply)),
+            Some('/') => Some(Token::new(TokenType::Divide)),
+            Some('-') => Some(Token::new(TokenType::Subtract)),
+            Some(',') => Some(Token::new(TokenType::Comma)),
+            Some(';') => Some(Token::new(TokenType::Semicolon)),
+            Some('(') => Some(Token::new(TokenType::LParen)),
+            Some(')') => Some(Token::new(TokenType::RParen)),
+            Some('{') => Some(Token::new(TokenType::LBrace)),
+            Some('}') => Some(Token::new(TokenType::RBrace)),
             Some('!') => {
                 let is_ne = match self.input.peek() {
                     Some(v) if *v == '=' => true,
@@ -159,27 +225,27 @@ impl<'a> Iterator for Lexer<'a> {
                 };
                 if is_ne {
                     self.read_char();
-                    Some(Token::NotEquals)
+                    Some(Token::new(TokenType::NotEquals))
                 } else {
-                    Some(Token::ExclamationMark)
+                    Some(Token::new(TokenType::ExclamationMark))
                 }
             }
-            Some('>') => Some(Token::GreaterThan),
-            Some('<') => Some(Token::LessThan),
+            Some('>') => Some(Token::new(TokenType::GreaterThan)),
+            Some('<') => Some(Token::new(TokenType::LessThan)),
             Some(ch) if is_letter(ch) => {
                 let ident = self.read_identifier(ch);
                 Some(lookup_ident(&ident))
             }
             Some(ch) if ch.is_ascii_digit() => {
                 let number = self.read_number(ch);
-                Some(Token::Int(number))
+                Some(Token::with_value(TokenType::Int, (number as i64).into()))
             }
             None if !self.eof_sent => {
                 self.eof_sent = true;
-                Some(Token::EOF)
+                Some(Token::new(TokenType::EOF))
             }
             None => None,
-            _ => Some(Token::Illegal),
+            _ => Some(Token::new(TokenType::Illegal)),
         }
     }
 }
@@ -191,31 +257,31 @@ fn is_letter(c: char) -> bool {
 fn lookup_ident(ident: &str) -> Token {
     match IDENTMAP.get(ident) {
         Some(v) => v.clone(),
-        None => Token::Ident(ident.to_string()),
+        None => Token::with_value(TokenType::Ident, ident.into()),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{Lexer, Token};
+    use super::{Lexer, Literal, Token, TokenType};
     use std::collections::HashMap;
 
     #[test]
-    fn new_token() {
+    fn new() {
         let mut tests = HashMap::new();
 
         tests.insert(
             "=+(){},;",
             vec![
-                Token::Assign,
-                Token::Plus,
-                Token::LParen,
-                Token::RParen,
-                Token::LBrace,
-                Token::RBrace,
-                Token::Comma,
-                Token::Semicolon,
-                Token::EOF,
+                Token::new(TokenType::Assign),
+                Token::new(TokenType::Plus),
+                Token::new(TokenType::LParen),
+                Token::new(TokenType::RParen),
+                Token::new(TokenType::LBrace),
+                Token::new(TokenType::RBrace),
+                Token::new(TokenType::Comma),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::EOF),
             ],
         );
         tests.insert(
@@ -228,43 +294,43 @@ mod tests {
 
         let result = add(five, ten);",
             vec![
-                Token::Let,
-                Token::Ident("five".to_string()),
-                Token::Assign,
-                Token::Int(5),
-                Token::Semicolon,
-                Token::Let,
-                Token::Ident("ten".to_string()),
-                Token::Assign,
-                Token::Int(10),
-                Token::Semicolon,
-                Token::Let,
-                Token::Ident("add".to_string()),
-                Token::Assign,
-                Token::Function,
-                Token::LParen,
-                Token::Ident("x".to_string()),
-                Token::Comma,
-                Token::Ident("y".to_string()),
-                Token::RParen,
-                Token::LBrace,
-                Token::Ident("x".to_string()),
-                Token::Plus,
-                Token::Ident("y".to_string()),
-                Token::Semicolon,
-                Token::RBrace,
-                Token::Semicolon,
-                Token::Let,
-                Token::Ident("result".to_string()),
-                Token::Assign,
-                Token::Ident("add".to_string()),
-                Token::LParen,
-                Token::Ident("five".to_string()),
-                Token::Comma,
-                Token::Ident("ten".to_string()),
-                Token::RParen,
-                Token::Semicolon,
-                Token::EOF,
+                Token::new(TokenType::Let),
+                Token::with_value(TokenType::Ident, "five".into()),
+                Token::new(TokenType::Assign),
+                Token::with_value(TokenType::Int, 5.into()),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::Let),
+                Token::with_value(TokenType::Ident, "ten".into()),
+                Token::new(TokenType::Assign),
+                Token::with_value(TokenType::Int, 10.into()),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::Let),
+                Token::with_value(TokenType::Ident, "add".into()),
+                Token::new(TokenType::Assign),
+                Token::new(TokenType::Function),
+                Token::new(TokenType::LParen),
+                Token::with_value(TokenType::Ident, "x".into()),
+                Token::new(TokenType::Comma),
+                Token::with_value(TokenType::Ident, "y".into()),
+                Token::new(TokenType::RParen),
+                Token::new(TokenType::LBrace),
+                Token::with_value(TokenType::Ident, "x".into()),
+                Token::new(TokenType::Plus),
+                Token::with_value(TokenType::Ident, "y".into()),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::RBrace),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::Let),
+                Token::with_value(TokenType::Ident, "result".into()),
+                Token::new(TokenType::Assign),
+                Token::with_value(TokenType::Ident, "add".into()),
+                Token::new(TokenType::LParen),
+                Token::with_value(TokenType::Ident, "five".into()),
+                Token::new(TokenType::Comma),
+                Token::with_value(TokenType::Ident, "ten".into()),
+                Token::new(TokenType::RParen),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::EOF),
             ],
         );
         tests.insert(
@@ -283,54 +349,54 @@ mod tests {
 
         ",
             vec![
-                Token::Let,
-                Token::Ident("result".to_string()),
-                Token::Assign,
-                Token::Ident("add".to_string()),
-                Token::LParen,
-                Token::Ident("five".to_string()),
-                Token::Comma,
-                Token::Ident("ten".to_string()),
-                Token::RParen,
-                Token::Semicolon,
-                Token::ExclamationMark,
-                Token::Subtract,
-                Token::Divide,
-                Token::Multiply,
-                Token::Int(5),
-                Token::Semicolon,
-                Token::Int(5),
-                Token::LessThan,
-                Token::Int(10),
-                Token::GreaterThan,
-                Token::Int(5),
-                Token::Semicolon,
-                Token::If,
-                Token::LParen,
-                Token::Int(5),
-                Token::LessThan,
-                Token::Int(10),
-                Token::RParen,
-                Token::LBrace,
-                Token::Return,
-                Token::True,
-                Token::Semicolon,
-                Token::RBrace,
-                Token::Else,
-                Token::LBrace,
-                Token::Return,
-                Token::False,
-                Token::Semicolon,
-                Token::RBrace,
-                Token::Int(10),
-                Token::Equals,
-                Token::Int(10),
-                Token::Semicolon,
-                Token::Int(9),
-                Token::NotEquals,
-                Token::Int(10),
-                Token::Semicolon,
-                Token::EOF,
+                Token::new(TokenType::Let),
+                Token::with_value(TokenType::Ident, "result".into()),
+                Token::new(TokenType::Assign),
+                Token::with_value(TokenType::Ident, "add".into()),
+                Token::new(TokenType::LParen),
+                Token::with_value(TokenType::Ident, "five".into()),
+                Token::new(TokenType::Comma),
+                Token::with_value(TokenType::Ident, "ten".into()),
+                Token::new(TokenType::RParen),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::ExclamationMark),
+                Token::new(TokenType::Subtract),
+                Token::new(TokenType::Divide),
+                Token::new(TokenType::Multiply),
+                Token::with_value(TokenType::Int, 5.into()),
+                Token::new(TokenType::Semicolon),
+                Token::with_value(TokenType::Int, 5.into()),
+                Token::new(TokenType::LessThan),
+                Token::with_value(TokenType::Int, 10.into()),
+                Token::new(TokenType::GreaterThan),
+                Token::with_value(TokenType::Int, 5.into()),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::If),
+                Token::new(TokenType::LParen),
+                Token::with_value(TokenType::Int, 5.into()),
+                Token::new(TokenType::LessThan),
+                Token::with_value(TokenType::Int, 10.into()),
+                Token::new(TokenType::RParen),
+                Token::new(TokenType::LBrace),
+                Token::new(TokenType::Return),
+                Token::new(TokenType::True),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::RBrace),
+                Token::new(TokenType::Else),
+                Token::new(TokenType::LBrace),
+                Token::new(TokenType::Return),
+                Token::new(TokenType::False),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::RBrace),
+                Token::with_value(TokenType::Int, 10.into()),
+                Token::new(TokenType::Equals),
+                Token::with_value(TokenType::Int, 10.into()),
+                Token::new(TokenType::Semicolon),
+                Token::with_value(TokenType::Int, 9.into()),
+                Token::new(TokenType::NotEquals),
+                Token::with_value(TokenType::Int, 10.into()),
+                Token::new(TokenType::Semicolon),
+                Token::new(TokenType::EOF),
             ],
         );
 

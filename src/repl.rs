@@ -1,7 +1,7 @@
 use crate::{lexer::Lexer, parser::Program};
 use std::io::{self, BufRead, Write};
 
-const PROMPT: &'static str = ">> ";
+const PROMPT: &str = ">> ";
 
 pub fn init() {
     let stdin = io::stdin();
@@ -14,7 +14,7 @@ pub fn init() {
 
 fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
     loop {
-        out.write(PROMPT.as_bytes()).unwrap();
+        out.write_all(PROMPT.as_bytes()).unwrap();
         out.flush().unwrap();
         let mut s = String::new();
         ip.read_line(&mut s).unwrap();
@@ -24,6 +24,7 @@ fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
             println!("{:?}", token);
         }
 
-        let _parser = Program::parse(tokens);
+        let parser = Program::parse(tokens);
+        println!("parser={:?}", parser);
     }
 }
