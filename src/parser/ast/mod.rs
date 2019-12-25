@@ -3,7 +3,7 @@ use crate::{
     parser::Parser,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Program {
     pub statements: Vec<Statement>,
 }
@@ -16,13 +16,15 @@ pub enum Node {
 #[derive(Debug, PartialEq)]
 pub enum Statement {
     Let(LetStatement),
+    Return(ReturnStatement),
 }
 
 impl<'a> Statement {
     pub fn parse(parser: &'a mut Parser, token: Token) -> Option<Self> {
         match token.name {
             TokenType::Let => Some(Statement::Let(LetStatement::parse(parser)?)),
-            _ => todo!(),
+            TokenType::Return => Some(Statement::Return(ReturnStatement::parse(parser)?)),
+            _ => None,
         }
     }
 }
@@ -57,9 +59,25 @@ impl LetStatement {
 
         // TODO: Right now, We are just skipping over all the expressions
         // That'll come later
+        // Also, Right now, It hangs forever in case there is no semicolon at the end
         while parser.lexer.next() != Some(Token::new(TokenType::Semicolon)) {}
 
         Some(stmt)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ReturnStatement {
+    return_value: Option<Expression>,
+}
+
+impl ReturnStatement {
+    fn parse(parser: &mut Parser) -> Option<Self> {
+        let stmt = ReturnStatement {
+            return_value: Some(Expression),
+        };
+        while parser.lexer.next() != Some(Token::new(TokenType::Semicolon)) {}
+        return Some(stmt);
     }
 }
 

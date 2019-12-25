@@ -24,7 +24,7 @@ fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
             println!("{:?}", token);
         }
 
-        let parser = Parser::new(tokens);
+        let mut parser = Parser::new(tokens);
 
         let stmts = parser.parse_program();
         println!("parser={:?}", stmts);

@@ -18,7 +18,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum TokenType {
     Illegal,
     EOF,
