@@ -2,25 +2,37 @@ pub mod ast;
 use {
     crate::{
         lexer::{Lexer, Token, TokenType},
-        parser::ast::{Program, Statement},
+        parser::ast::{Expression, Program, Statement},
     },
     std::{
+        collections::HashMap,
         fmt::{Display, Error as FmtError, Formatter},
         iter::Peekable,
     },
 };
 
+type PrefixParseFn = fn(&mut Parser, token: Token) -> Option<Expression>;
+type InfixParseFn = fn(Expression) -> Option<Expression>;
+
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
     errors: Vec<ParserError>,
+    prefix_parse_fns: HashMap<TokenType, PrefixParseFn>,
+    infix_parse_fns: HashMap<TokenType, InfixParseFn>,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(lexer: Lexer<'a>) -> Self {
-        Self {
+        let mut parser = Parser {
             lexer: lexer.peekable(),
             errors: vec![],
-        }
+            prefix_parse_fns: HashMap::new(),
+            infix_parse_fns: HashMap::new(),
+        };
+
+        parser.register_prefix(TokenType::Ident, Expression::parse_identifier);
+        parser.register_prefix(TokenType::Int, Expression::parse_integer_literal);
+        parser
     }
 
     pub fn parse_program(&mut self) -> Program {
@@ -71,6 +83,14 @@ impl<'a> Parser<'a> {
         };
         self.errors.push(ParserError { reason: msg });
     }
+
+    fn register_prefix(&mut self, token: TokenType, f: PrefixParseFn) {
+        self.prefix_parse_fns.insert(token, f);
+    }
+
+    fn register_infix(&mut self, token: TokenType, f: InfixParseFn) {
+        self.infix_parse_fns.insert(token, f);
+    }
 }
 
 pub struct ParserError {
@@ -88,7 +108,10 @@ mod tests {
     use crate::{
         lexer::{Lexer, Token, TokenType},
         parser::{
-            ast::{Expression, ExpressionStatement, Identifier, LetStatement, Program, Statement},
+            ast::{
+                Expression, ExpressionStatement, Identifier, IntegerLiteral, LetStatement, Program,
+                Statement,
+            },
             Parser,
         },
     };
@@ -98,9 +121,7 @@ mod tests {
             return;
         } else {
             let mut out = String::new();
-
             out.push_str(&format!("parser has {} errors\n", p.errors.len()));
-
             for error in &p.errors {
                 out.push_str(&format!("parser error: {}\n", error));
             }
@@ -135,13 +156,11 @@ mod tests {
             }
         );
 
-        lexer = Lexer::new("let x = 5;let x 5; let 83838383; let = 10;");
+        lexer = Lexer::new("let x 5; let 10; let 83838383;");
         parser = Parser::new(lexer);
-        let program = parser.parse_program();
+        let _program = parser.parse_program();
         check_parser_errors(&parser);
-        //   println!("{:?}", program);
         assert_eq!(parser.errors.len(), 3);
-        assert_eq!(program.statements.len(), 1);
     }
 
     #[test]
@@ -153,5 +172,37 @@ mod tests {
         check_parser_errors(&parser);
         assert_eq!(program.statements.len(), 3);
         assert_eq!(parser.errors.len(), 0);
+    }
+    #[test]
+    fn identifier_expression() {
+        let lexer = Lexer::new("foobar;");
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program();
+
+        check_parser_errors(&parser);
+        assert_eq!(program.statements.len(), 1);
+        assert_eq!(
+            program.statements,
+            vec![Statement::ExpressionStatement(ExpressionStatement {
+                token: Token::with_value(TokenType::Ident, "foobar"),
+                expression: Expression::Identifier(Identifier::new(TokenType::Ident, "foobar")),
+            })]
+        );
+    }
+
+    #[test]
+    fn integer_literal_expression() {
+        let lexer = Lexer::new("5;");
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program();
+        check_parser_errors(&parser);
+
+        assert_eq!(
+            program.statements,
+            vec![Statement::ExpressionStatement(ExpressionStatement {
+                token: Token::with_value(TokenType::Int, "5"),
+                expression: Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5))
+            })]
+        );
     }
 }

@@ -2,7 +2,7 @@
 use {
     crate::{
         lexer::{Token, TokenType},
-        parser::Parser,
+        parser::{Parser, ParserError},
     },
     std::convert::From,
 };
@@ -181,28 +181,43 @@ enum ExpressionPriority {
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     Identifier(Identifier),
+    IntegerLiteral(IntegerLiteral),
     // TODO: Temporary placeholder value. Should be removed once this section is done
     None,
 }
 
 impl Expression {
     fn parse(parser: &mut Parser, token: Token, precedence: ExpressionPriority) -> Option<Self> {
-        match token.name {
-            TokenType::Ident => Self::parse_identifier(parser, token),
-            _ => None,
-        }
+        let prefix = parser.prefix_parse_fns.get(&token.name)?;
+
+        prefix(parser, token)
     }
 
-    fn parse_identifier(parser: &mut Parser, token: Token) -> Option<Self> {
+    pub fn parse_identifier(parser: &mut Parser, token: Token) -> Option<Self> {
         Some(Self::Identifier(Identifier::new(
             token.name,
             &token.literal?,
         )))
     }
 
+    pub fn parse_integer_literal(parser: &mut Parser, token: Token) -> Option<Self> {
+        let n = match token.literal?.parse::<i64>() {
+            Ok(v) => v,
+            Err(e) => {
+                parser.errors.push(ParserError {
+                    reason: e.to_string(),
+                });
+                return None;
+            }
+        };
+
+        Some(Self::IntegerLiteral(IntegerLiteral::new(TokenType::Int, n)))
+    }
+
     fn to_string(&self) -> String {
         match self {
             Expression::Identifier(v) => v.to_string(),
+            Expression::IntegerLiteral(v) => v.value.to_string(),
             Expression::None => "None".into(),
         }
     }
@@ -233,6 +248,21 @@ impl Identifier {
 
     pub fn to_string(&self) -> String {
         self.value.clone()
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct IntegerLiteral {
+    token: TokenType,
+    value: i64,
+}
+
+impl IntegerLiteral {
+    pub fn new(token: TokenType, v: i64) -> Self {
+        Self {
+            token: token,
+            value: v,
+        }
     }
 }
 
