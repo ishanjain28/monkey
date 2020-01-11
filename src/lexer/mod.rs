@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    convert::Into,
     iter::Peekable,
     str::{self, Chars},
 };
@@ -28,7 +29,7 @@ pub enum TokenType {
     // Ident is basically most things that are not covered
     // by other variants of this enum.
     Ident,
-
+    Int,
     // Operators
     Assign,
     Plus,
@@ -52,11 +53,42 @@ pub enum TokenType {
     // Keywords
     Function,
     If,
+    Else,
     Let,
     True,
-    Else,
     False,
     Return,
+}
+
+impl Into<&'static str> for TokenType {
+    fn into(self) -> &'static str {
+        match self {
+            TokenType::Assign => "=",
+            TokenType::Plus => "+",
+            TokenType::Multiply => "*",
+            TokenType::Divide => "/",
+            TokenType::Subtract => "-",
+            TokenType::ExclamationMark => "!",
+            TokenType::LessThan => "<=",
+            TokenType::GreaterThan => ">=",
+            TokenType::Equals => "==",
+            TokenType::NotEquals => "!=",
+            TokenType::Comma => ",",
+            TokenType::Semicolon => ";",
+            TokenType::LParen => "(",
+            TokenType::RParen => ")",
+            TokenType::LBrace => "{",
+            TokenType::RBrace => "}",
+            TokenType::Function => "fn",
+            TokenType::If => "if",
+            TokenType::Else => "else",
+            TokenType::Let => "let",
+            TokenType::True => "true",
+            TokenType::False => "false",
+            TokenType::Return => "return",
+            _ => unreachable!(),
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Hash)]
@@ -80,6 +112,10 @@ impl Token {
             name,
             literal: Some(value.to_string()),
         }
+    }
+
+    pub fn to_string(&self) -> &'static str {
+        self.name.into()
     }
 }
 
@@ -200,7 +236,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             Some(ch) if ch.is_ascii_digit() => {
                 let number = self.read_number(ch);
-                Some(Token::with_value(TokenType::Ident, &number))
+                Some(Token::with_value(TokenType::Int, &number))
             }
             None if !self.eof_sent => {
                 self.eof_sent = true;
@@ -261,12 +297,12 @@ mod tests {
                 Token::new(TokenType::Let),
                 Token::with_value(TokenType::Ident, "five"),
                 Token::new(TokenType::Assign),
-                Token::with_value(TokenType::Ident, "5"),
+                Token::with_value(TokenType::Int, "5"),
                 Token::new(TokenType::Semicolon),
                 Token::new(TokenType::Let),
                 Token::with_value(TokenType::Ident, "ten"),
                 Token::new(TokenType::Assign),
-                Token::with_value(TokenType::Ident, "10"),
+                Token::with_value(TokenType::Int, "10"),
                 Token::new(TokenType::Semicolon),
                 Token::new(TokenType::Let),
                 Token::with_value(TokenType::Ident, "add"),
@@ -303,16 +339,16 @@ mod tests {
                 "let result = add(five, ten);
                 !-/*5;
                 5 < 10 > 5;
-        
+
                 if(5 < 10) {
                     return true;
                 } else {
                     return false;
                 }
-        
+
                 10 == 10;
                 9 != 10;
-        
+
                 "
             )
             .collect::<Vec<Token>>(),
@@ -331,19 +367,19 @@ mod tests {
                 Token::new(TokenType::Subtract),
                 Token::new(TokenType::Divide),
                 Token::new(TokenType::Multiply),
-                Token::with_value(TokenType::Ident, "5"),
+                Token::with_value(TokenType::Int, "5"),
                 Token::new(TokenType::Semicolon),
-                Token::with_value(TokenType::Ident, "5"),
+                Token::with_value(TokenType::Int, "5"),
                 Token::new(TokenType::LessThan),
-                Token::with_value(TokenType::Ident, "10"),
+                Token::with_value(TokenType::Int, "10"),
                 Token::new(TokenType::GreaterThan),
-                Token::with_value(TokenType::Ident, "5"),
+                Token::with_value(TokenType::Int, "5"),
                 Token::new(TokenType::Semicolon),
                 Token::new(TokenType::If),
                 Token::new(TokenType::LParen),
-                Token::with_value(TokenType::Ident, "5"),
+                Token::with_value(TokenType::Int, "5"),
                 Token::new(TokenType::LessThan),
-                Token::with_value(TokenType::Ident, "10"),
+                Token::with_value(TokenType::Int, "10"),
                 Token::new(TokenType::RParen),
                 Token::new(TokenType::LBrace),
                 Token::new(TokenType::Return),
@@ -356,13 +392,13 @@ mod tests {
                 Token::new(TokenType::False),
                 Token::new(TokenType::Semicolon),
                 Token::new(TokenType::RBrace),
-                Token::with_value(TokenType::Ident, "10"),
+                Token::with_value(TokenType::Int, "10"),
                 Token::new(TokenType::Equals),
-                Token::with_value(TokenType::Ident, "10"),
+                Token::with_value(TokenType::Int, "10"),
                 Token::new(TokenType::Semicolon),
-                Token::with_value(TokenType::Ident, "9"),
+                Token::with_value(TokenType::Int, "9"),
                 Token::new(TokenType::NotEquals),
-                Token::with_value(TokenType::Ident, "10"),
+                Token::with_value(TokenType::Int, "10"),
                 Token::new(TokenType::Semicolon),
                 Token::new(TokenType::EOF),
             ],

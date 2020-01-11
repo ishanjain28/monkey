@@ -12,7 +12,7 @@ use {
 
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
-    pub errors: Vec<ParserError>,
+    errors: Vec<ParserError>,
 }
 
 impl<'a> Parser<'a> {
@@ -30,7 +30,7 @@ impl<'a> Parser<'a> {
             if token.name == TokenType::EOF {
                 break;
             }
-            match Statement::parse(self, token.clone()) {
+            match Statement::parse(self, token) {
                 Some(v) => program.statements.push(v),
                 None => {} // This will happen in case of a parsing error or something
             }
@@ -86,12 +86,28 @@ impl Display for ParserError {
 #[cfg(test)]
 mod tests {
     use crate::{
-        lexer::{Lexer, TokenType},
+        lexer::{Lexer, Token, TokenType},
         parser::{
-            ast::{Identifier, LetStatement, Program, Statement},
+            ast::{Expression, ExpressionStatement, Identifier, LetStatement, Program, Statement},
             Parser,
         },
     };
+
+    fn check_parser_errors(p: &Parser) {
+        if p.errors.is_empty() {
+            return;
+        } else {
+            let mut out = String::new();
+
+            out.push_str(&format!("parser has {} errors\n", p.errors.len()));
+
+            for error in &p.errors {
+                out.push_str(&format!("parser error: {}\n", error));
+            }
+            eprintln!("{}", out);
+        }
+    }
+
     #[test]
     fn let_statements() {
         let mut lexer = Lexer::new("let x =5;let y=10; let foobar=538383;");
@@ -119,10 +135,11 @@ mod tests {
             }
         );
 
-        lexer = Lexer::new("let x = 5;let x 5;let = 10; let 83838383;");
+        lexer = Lexer::new("let x = 5;let x 5; let 83838383; let = 10;");
         parser = Parser::new(lexer);
         let program = parser.parse_program();
         check_parser_errors(&parser);
+        //   println!("{:?}", program);
         assert_eq!(parser.errors.len(), 3);
         assert_eq!(program.statements.len(), 1);
     }
@@ -136,20 +153,5 @@ mod tests {
         check_parser_errors(&parser);
         assert_eq!(program.statements.len(), 3);
         assert_eq!(parser.errors.len(), 0);
-    }
-
-    fn check_parser_errors(p: &Parser) {
-        if p.errors.is_empty() {
-            return;
-        } else {
-            let mut out = String::new();
-
-            out.push_str(&format!("parser has {} errors\n", p.errors.len()));
-
-            for error in &p.errors {
-                out.push_str(&format!("parser error: {}\n", error));
-            }
-            eprintln!("{}", out);
-        }
     }
 }
