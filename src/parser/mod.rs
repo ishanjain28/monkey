@@ -53,6 +53,8 @@ impl<'a> Parser<'a> {
         parser.register_prefix(TokenType::Minus, Expression::parse_prefix_expression);
         parser.register_prefix(TokenType::True, Expression::parse_boolean);
         parser.register_prefix(TokenType::False, Expression::parse_boolean);
+        parser.register_prefix(TokenType::LParen, Expression::parse_grouped_expression);
+        parser.register_prefix(TokenType::If, Expression::parse_if_expression);
 
         parser.register_infix(TokenType::Plus, Expression::parse_infix_expression);
         parser.register_infix(TokenType::Minus, Expression::parse_infix_expression);
@@ -182,6 +184,7 @@ mod tests {
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         check_parser_errors(&parser);
+        assert_eq!(parser.errors.len(), 0);
         assert!(program.is_some());
         let program = program.unwrap();
         assert_eq!(program.statements.len(), 3);
@@ -219,6 +222,7 @@ mod tests {
         let program = parser.parse_program();
 
         check_parser_errors(&parser);
+        assert_eq!(parser.errors.len(), 0);
         assert!(program.is_some());
         let program = program.unwrap();
         assert_eq!(program.statements.len(), 3);
@@ -232,6 +236,7 @@ mod tests {
         let program = parser.parse_program();
 
         check_parser_errors(&parser);
+        assert_eq!(parser.errors.len(), 0);
         assert!(program.is_some());
         let program = program.unwrap();
         assert_eq!(program.statements.len(), 1);
@@ -250,6 +255,7 @@ mod tests {
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         check_parser_errors(&parser);
+        assert_eq!(parser.errors.len(), 0);
         assert!(program.is_some());
 
         assert_eq!(
@@ -340,6 +346,7 @@ mod tests {
             let mut parser = Parser::new(lexer);
             let program = parser.parse_program();
             check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
             assert!(program.is_some());
             assert_eq!(program.unwrap().statements, test.1);
         }
@@ -467,6 +474,7 @@ mod tests {
             let mut parser = Parser::new(lexer);
             let program = parser.parse_program();
             check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
             assert!(program.is_some());
             assert_eq!(program.unwrap().statements, test.1);
         }
@@ -498,6 +506,11 @@ mod tests {
             ("false", "false"),
             ("3 > 5 == false", "((3 > 5) == false)"),
             ("3 < 5 == true", "((3 < 5) == true)"),
+            ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
+            ("(5 + 5) * 2", "((5 + 5) * 2)"),
+            ("2 / (5 + 5)", "(2 / (5 + 5))"),
+            ("-(5 + 5)", "(-(5 + 5))"),
+            ("!(true == true)", "(!(true == true))"),
         ];
 
         for test in test_cases.iter() {
@@ -505,6 +518,7 @@ mod tests {
             let mut parser = Parser::new(lexer);
             let program = parser.parse_program();
             check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
             assert!(program.is_some());
             assert_eq!(program.unwrap().to_string(), test.1);
         }
@@ -547,6 +561,98 @@ mod tests {
             let mut parser = Parser::new(lexer);
             let program = parser.parse_program();
             check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap(), test.1);
+        }
+    }
+    #[test]
+    fn if_expression() {
+        let test_cases = [(
+            "if (x > y) { x };",
+            Program {
+                statements: vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::If),
+                    Expression::IfExpression(IfExpression::new(
+                        TokenType::If,
+                        Expression::InfixExpression(InfixExpression::new(
+                            Token::new(TokenType::GreaterThan),
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
+                            ">",
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
+                        )),
+                        BlockStatement::new(
+                            Token::with_value(TokenType::Ident, "x"),
+                            vec![Statement::ExpressionStatement(ExpressionStatement {
+                                token: Token::with_value(TokenType::Ident, "x"),
+                                expression: Expression::Identifier(Identifier::new(
+                                    TokenType::Ident,
+                                    "x",
+                                )),
+                            })],
+                        ),
+                        None,
+                    )),
+                ))],
+            },
+        )];
+
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap(), test.1);
+        }
+    }
+    #[test]
+    fn if_else_expression() {
+        let test_cases = [(
+            "if (x > y) { x } else { y };",
+            Program {
+                statements: vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::If),
+                    Expression::IfExpression(IfExpression::new(
+                        TokenType::If,
+                        Expression::InfixExpression(InfixExpression::new(
+                            Token::new(TokenType::GreaterThan),
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
+                            ">",
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
+                        )),
+                        BlockStatement::new(
+                            Token::with_value(TokenType::Ident, "x"),
+                            vec![Statement::ExpressionStatement(ExpressionStatement {
+                                token: Token::with_value(TokenType::Ident, "x"),
+                                expression: Expression::Identifier(Identifier::new(
+                                    TokenType::Ident,
+                                    "x",
+                                )),
+                            })],
+                        ),
+                        Some(BlockStatement::new(
+                            Token::new(TokenType::Else),
+                            vec![Statement::ExpressionStatement(ExpressionStatement {
+                                token: Token::with_value(TokenType::Ident, "y"),
+                                expression: Expression::Identifier(Identifier::new(
+                                    TokenType::Ident,
+                                    "y",
+                                )),
+                            })],
+                        )),
+                    )),
+                ))],
+            },
+        )];
+
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
             assert!(program.is_some());
             assert_eq!(program.unwrap(), test.1);
         }

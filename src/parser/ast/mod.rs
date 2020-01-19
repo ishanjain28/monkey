@@ -32,6 +32,7 @@ pub enum Statement {
     Let(LetStatement),
     Return(ReturnStatement),
     ExpressionStatement(ExpressionStatement),
+    BlockStatement(BlockStatement),
 }
 
 impl<'a> Statement {
@@ -46,12 +47,13 @@ impl<'a> Statement {
     }
 }
 
-impl Display for Statement {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+impl ToString for Statement {
+    fn to_string(&self) -> String {
         match self {
-            Statement::Let(v) => write!(f, "{}", v.to_string()),
-            Statement::Return(v) => write!(f, "{}", v.to_string()),
-            Statement::ExpressionStatement(v) => write!(f, "{}", v.to_string()),
+            Statement::Let(v) => v.to_string(),
+            Statement::Return(v) => v.to_string(),
+            Statement::ExpressionStatement(v) => v.to_string(),
+            Statement::BlockStatement(v) => v.to_string(),
         }
     }
 }
@@ -160,9 +162,9 @@ impl ExpressionStatement {
     }
 }
 
-impl Display for ExpressionStatement {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        write!(f, "{}", self.expression.to_string())
+impl ToString for ExpressionStatement {
+    fn to_string(&self) -> String {
+        String::from(self.expression.to_string())
     }
 }
 
@@ -184,6 +186,7 @@ pub enum Expression {
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
     BooleanExpression(BooleanExpression),
+    IfExpression(IfExpression),
     // TODO: Temporary placeholder value. Should be removed once this section is done
     None,
 }
@@ -241,6 +244,58 @@ impl Expression {
         Some(Self::BooleanExpression(BooleanExpression::new(token.name)))
     }
 
+    pub fn parse_grouped_expression(parser: &mut Parser, _token: Token) -> Option<Self> {
+        let next_token = parser.lexer.next()?;
+        let expr = Expression::parse(parser, next_token, ExpressionPriority::Lowest);
+
+        if parser.expect_peek(TokenType::RParen).is_none() {
+            None
+        } else {
+            expr
+        }
+    }
+
+    pub fn parse_if_expression(parser: &mut Parser, ctoken: Token) -> Option<Self> {
+        if parser.expect_peek(TokenType::LParen).is_none() {
+            return None;
+        }
+        let next_token = parser.lexer.next()?;
+        let condition = Expression::parse(parser, next_token.clone(), ExpressionPriority::Lowest)?;
+
+        if parser.expect_peek(TokenType::RParen).is_none() {
+            return None;
+        }
+        if parser.expect_peek(TokenType::LBrace).is_none() {
+            return None;
+        }
+
+        let consequence = BlockStatement::parse(parser, next_token)?;
+
+        if parser.peek_token_is(TokenType::Else) {
+            let token = parser.lexer.next()?;
+
+            if parser.expect_peek(TokenType::LBrace).is_none() {
+                return None;
+            }
+
+            let alternative = BlockStatement::parse(parser, token);
+
+            Some(Expression::IfExpression(IfExpression::new(
+                ctoken.name,
+                condition,
+                consequence,
+                alternative,
+            )))
+        } else {
+            Some(Expression::IfExpression(IfExpression::new(
+                ctoken.name,
+                condition,
+                consequence,
+                None,
+            )))
+        }
+    }
+
     pub fn parse_prefix_expression(parser: &mut Parser, ctoken: Token) -> Option<Self> {
         let next_token = parser.lexer.next()?;
         let right_expr = Expression::parse(parser, next_token.clone(), ExpressionPriority::Prefix)?;
@@ -279,6 +334,7 @@ impl Display for Expression {
                 Expression::PrefixExpression(v) => v.to_string(),
                 Expression::InfixExpression(v) => v.to_string(),
                 Expression::BooleanExpression(v) => v.to_string(),
+                Expression::IfExpression(v) => v.to_string(),
                 Expression::None => "None".into(),
             }
         )
@@ -402,6 +458,90 @@ impl BooleanExpression {
 impl Display for BooleanExpression {
     fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         write!(f, "{}", self.value)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct IfExpression {
+    token: TokenType,
+    condition: Box<Expression>,
+    consequence: BlockStatement,
+    alternative: Option<BlockStatement>,
+}
+
+impl IfExpression {
+    pub fn new(
+        token: TokenType,
+        condition: Expression,
+        consequence: BlockStatement,
+        alternative: Option<BlockStatement>,
+    ) -> Self {
+        Self {
+            token,
+            condition: Box::new(condition),
+            consequence,
+            alternative,
+        }
+    }
+}
+
+impl ToString for IfExpression {
+    fn to_string(&self) -> String {
+        let mut out = format!(
+            "if {} {{ {} }} ",
+            self.condition.to_string(),
+            self.consequence.to_string()
+        );
+        if let Some(alternative) = &self.alternative {
+            out += &format!("else {{ {} }}", alternative.to_string());
+        }
+        out
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct BlockStatement {
+    token: Token,
+    statements: Vec<Statement>,
+}
+
+impl BlockStatement {
+    pub fn new(token: Token, stmt: Vec<Statement>) -> Self {
+        Self {
+            token,
+            statements: stmt,
+        }
+    }
+
+    pub fn parse(parser: &mut Parser, ogtoken: Token) -> Option<Self> {
+        let mut stmts = vec![];
+
+        let mut ctoken = parser.lexer.next();
+
+        while let Some(token) = ctoken {
+            if token.name == TokenType::RBrace {
+                break;
+            }
+
+            let stmt = Statement::parse(parser, token);
+            if stmt.is_some() {
+                stmts.push(stmt.unwrap());
+            }
+            ctoken = parser.lexer.next();
+        }
+
+        Some(BlockStatement::new(ogtoken, stmts))
+    }
+}
+
+impl ToString for BlockStatement {
+    fn to_string(&self) -> String {
+        let mut out = String::new();
+
+        for stmt in &self.statements {
+            out.push_str(&stmt.to_string());
+        }
+        out
     }
 }
 
