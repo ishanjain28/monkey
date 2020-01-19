@@ -65,6 +65,9 @@ pub struct LetStatement {
 }
 
 impl LetStatement {
+    pub fn new(name: Identifier, value: Option<Expression>) -> Self {
+        Self { name, value }
+    }
     // TODO: Implement code to parse let statement
     pub fn parse(parser: &mut Parser) -> Option<Self> {
         let mut stmt = LetStatement {
@@ -142,6 +145,9 @@ pub struct ExpressionStatement {
 }
 
 impl ExpressionStatement {
+    pub fn new(token: Token, expression: Expression) -> Self {
+        Self { token, expression }
+    }
     fn parse(parser: &mut Parser, current_token: Token) -> Option<Self> {
         let stmt = ExpressionStatement {
             token: current_token.clone(),
@@ -177,6 +183,7 @@ pub enum Expression {
     IntegerLiteral(IntegerLiteral),
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
+    BooleanExpression(BooleanExpression),
     // TODO: Temporary placeholder value. Should be removed once this section is done
     None,
 }
@@ -227,8 +234,11 @@ impl Expression {
                 return None;
             }
         };
-
         Some(Self::IntegerLiteral(IntegerLiteral::new(TokenType::Int, n)))
+    }
+
+    pub fn parse_boolean(_parser: &mut Parser, token: Token) -> Option<Self> {
+        Some(Self::BooleanExpression(BooleanExpression::new(token.name)))
     }
 
     pub fn parse_prefix_expression(parser: &mut Parser, ctoken: Token) -> Option<Self> {
@@ -268,6 +278,7 @@ impl Display for Expression {
                 Expression::IntegerLiteral(v) => v.value.to_string(),
                 Expression::PrefixExpression(v) => v.to_string(),
                 Expression::InfixExpression(v) => v.to_string(),
+                Expression::BooleanExpression(v) => v.to_string(),
                 Expression::None => "None".into(),
             }
         )
@@ -370,6 +381,27 @@ impl Display for InfixExpression {
             self.operator,
             self.right.to_string()
         )
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct BooleanExpression {
+    token: TokenType,
+    value: bool,
+}
+
+impl BooleanExpression {
+    pub fn new(token: TokenType) -> Self {
+        BooleanExpression {
+            token: token,
+            value: token == TokenType::True,
+        }
+    }
+}
+
+impl Display for BooleanExpression {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        write!(f, "{}", self.value)
     }
 }
 

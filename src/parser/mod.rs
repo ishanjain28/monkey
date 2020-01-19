@@ -14,6 +14,8 @@ use {
 type PrefixParseFn = fn(&mut Parser, token: Token) -> Option<Expression>;
 type InfixParseFn = fn(&mut Parser, Token, Expression) -> Option<Expression>;
 
+//TODO: Add Parser tracing so we can easily figure out the call stack hierarchy
+
 lazy_static! {
     static ref PRECEDENCE_MAP: HashMap<TokenType, ExpressionPriority> = {
         let mut m = HashMap::new();
@@ -49,6 +51,8 @@ impl<'a> Parser<'a> {
         parser.register_prefix(TokenType::Int, Expression::parse_integer_literal);
         parser.register_prefix(TokenType::Bang, Expression::parse_prefix_expression);
         parser.register_prefix(TokenType::Minus, Expression::parse_prefix_expression);
+        parser.register_prefix(TokenType::True, Expression::parse_boolean);
+        parser.register_prefix(TokenType::False, Expression::parse_boolean);
 
         parser.register_infix(TokenType::Plus, Expression::parse_infix_expression);
         parser.register_infix(TokenType::Minus, Expression::parse_infix_expression);
@@ -293,6 +297,28 @@ mod tests {
                     )),
                 })],
             ),
+            (
+                "!true;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::new(TokenType::Bang),
+                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                        Token::new(TokenType::Bang),
+                        "!",
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
+                    )),
+                })],
+            ),
+            (
+                "!false;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::new(TokenType::Bang),
+                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                        Token::new(TokenType::Bang),
+                        "!",
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
+                    )),
+                })],
+            ),
             // TODO: Add this test when we add function call parser
             // (
             //     "!isGreaterThanZero( 2);",
@@ -399,6 +425,42 @@ mod tests {
                     )),
                 })],
             ),
+            (
+                "true == true",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::new(TokenType::True),
+                    expression: Expression::InfixExpression(InfixExpression::new(
+                        Token::new(TokenType::Equals),
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
+                        "==",
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
+                    )),
+                })],
+            ),
+            (
+                "true != false",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::new(TokenType::True),
+                    expression: Expression::InfixExpression(InfixExpression::new(
+                        Token::new(TokenType::NotEquals),
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
+                        "!=",
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
+                    )),
+                })],
+            ),
+            (
+                "false == false",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::new(TokenType::False),
+                    expression: Expression::InfixExpression(InfixExpression::new(
+                        Token::new(TokenType::Equals),
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
+                        "==",
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
+                    )),
+                })],
+            ),
         ];
         for test in infix_tests.iter() {
             let lexer = Lexer::new(test.0);
@@ -411,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    fn test_operator_precedence_parsing() {
+    fn operator_precedence_parsing() {
         let test_cases = [
             ("-a * b", "((-a) * b)"),
             ("!-a", "(!(-a))"),
@@ -432,6 +494,10 @@ mod tests {
                 "3 + 4 * 5 == 3 * 1 + 4 * 5",
                 "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
             ),
+            ("true", "true"),
+            ("false", "false"),
+            ("3 > 5 == false", "((3 > 5) == false)"),
+            ("3 < 5 == true", "((3 < 5) == true)"),
         ];
 
         for test in test_cases.iter() {
@@ -441,6 +507,48 @@ mod tests {
             check_parser_errors(&parser);
             assert!(program.is_some());
             assert_eq!(program.unwrap().to_string(), test.1);
+        }
+    }
+
+    #[test]
+    fn boolean_expression() {
+        let test_cases = [
+            (
+                "true;",
+                Program {
+                    statements: vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                        Token::new(TokenType::True),
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
+                    ))],
+                },
+            ),
+            (
+                "false;",
+                Program {
+                    statements: vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                        Token::new(TokenType::False),
+                        Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
+                    ))],
+                },
+            ),
+            (
+                "let foobar = true;",
+                Program {
+                    statements: vec![Statement::Let(LetStatement::new(
+                        Identifier::new(TokenType::Let, "foobar"),
+                        None, // TODO: fix this when we complete parsing of let statements
+                    ))],
+                },
+            ),
+        ];
+
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap(), test.1);
         }
     }
 }
