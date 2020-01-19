@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    convert::Into,
     iter::Peekable,
     str::{self, Chars},
 };
@@ -33,10 +32,10 @@ pub enum TokenType {
     // Operators
     Assign,
     Plus,
-    Multiply,
-    Divide,
-    Subtract,
-    ExclamationMark,
+    Asterisk,
+    Slash,
+    Minus,
+    Bang,
     LessThan,
     GreaterThan,
     Equals,
@@ -60,17 +59,17 @@ pub enum TokenType {
     Return,
 }
 
-impl Into<&'static str> for TokenType {
-    fn into(self) -> &'static str {
+impl TokenType {
+    pub fn to_string(&self) -> &'static str {
         match self {
             TokenType::Assign => "=",
             TokenType::Plus => "+",
-            TokenType::Multiply => "*",
-            TokenType::Divide => "/",
-            TokenType::Subtract => "-",
-            TokenType::ExclamationMark => "!",
-            TokenType::LessThan => "<=",
-            TokenType::GreaterThan => ">=",
+            TokenType::Asterisk => "*",
+            TokenType::Slash => "/",
+            TokenType::Minus => "-",
+            TokenType::Bang => "!",
+            TokenType::LessThan => "<",
+            TokenType::GreaterThan => ">",
             TokenType::Equals => "==",
             TokenType::NotEquals => "!=",
             TokenType::Comma => ",",
@@ -86,7 +85,10 @@ impl Into<&'static str> for TokenType {
             TokenType::True => "true",
             TokenType::False => "false",
             TokenType::Return => "return",
-            _ => unreachable!(),
+            _ => {
+                eprintln!("{:?}", self);
+                unreachable!()
+            }
         }
     }
 }
@@ -113,9 +115,11 @@ impl Token {
             literal: Some(value.to_string()),
         }
     }
+}
 
-    pub fn to_string(&self) -> &'static str {
-        self.name.into()
+impl ToString for Token {
+    fn to_string(&self) -> String {
+        self.name.to_string().into()
     }
 }
 
@@ -207,9 +211,9 @@ impl<'a> Iterator for Lexer<'a> {
                 }
             }
             Some('+') => Some(Token::new(TokenType::Plus)),
-            Some('*') => Some(Token::new(TokenType::Multiply)),
-            Some('/') => Some(Token::new(TokenType::Divide)),
-            Some('-') => Some(Token::new(TokenType::Subtract)),
+            Some('*') => Some(Token::new(TokenType::Asterisk)),
+            Some('/') => Some(Token::new(TokenType::Slash)),
+            Some('-') => Some(Token::new(TokenType::Minus)),
             Some(',') => Some(Token::new(TokenType::Comma)),
             Some(';') => Some(Token::new(TokenType::Semicolon)),
             Some('(') => Some(Token::new(TokenType::LParen)),
@@ -225,7 +229,7 @@ impl<'a> Iterator for Lexer<'a> {
                     self.read_char();
                     Some(Token::new(TokenType::NotEquals))
                 } else {
-                    Some(Token::new(TokenType::ExclamationMark))
+                    Some(Token::new(TokenType::Bang))
                 }
             }
             Some('>') => Some(Token::new(TokenType::GreaterThan)),
@@ -363,10 +367,10 @@ mod tests {
                 Token::with_value(TokenType::Ident, "ten"),
                 Token::new(TokenType::RParen),
                 Token::new(TokenType::Semicolon),
-                Token::new(TokenType::ExclamationMark),
-                Token::new(TokenType::Subtract),
-                Token::new(TokenType::Divide),
-                Token::new(TokenType::Multiply),
+                Token::new(TokenType::Bang),
+                Token::new(TokenType::Minus),
+                Token::new(TokenType::Slash),
+                Token::new(TokenType::Asterisk),
                 Token::with_value(TokenType::Int, "5"),
                 Token::new(TokenType::Semicolon),
                 Token::with_value(TokenType::Int, "5"),

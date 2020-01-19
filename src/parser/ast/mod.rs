@@ -2,9 +2,13 @@
 use {
     crate::{
         lexer::{Token, TokenType},
-        parser::{Parser, ParserError},
+        parser::{Error as ParserError, Parser},
     },
-    std::convert::From,
+    std::{
+        cmp::PartialOrd,
+        convert::From,
+        fmt::{Display, Error as FmtError, Formatter},
+    },
 };
 
 #[derive(Debug, PartialEq)]
@@ -12,21 +16,15 @@ pub struct Program {
     pub statements: Vec<Statement>,
 }
 
-impl ToString for Program {
-    fn to_string(&self) -> String {
+impl Display for Program {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         let mut out = String::new();
 
         for statement in &self.statements {
             out.push_str(&statement.to_string());
-            out.push('\n');
         }
-        out
+        write!(f, "{}", out)
     }
-}
-
-pub enum Node {
-    Statement(Statement),
-    Expression(Expression),
 }
 
 #[derive(Debug, PartialEq)]
@@ -48,12 +46,12 @@ impl<'a> Statement {
     }
 }
 
-impl ToString for Statement {
-    fn to_string(&self) -> String {
+impl Display for Statement {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         match self {
-            Statement::Let(v) => v.to_string(),
-            Statement::Return(v) => v.to_string(),
-            Statement::ExpressionStatement(v) => v.to_string(),
+            Statement::Let(v) => write!(f, "{}", v.to_string()),
+            Statement::Return(v) => write!(f, "{}", v.to_string()),
+            Statement::ExpressionStatement(v) => write!(f, "{}", v.to_string()),
         }
     }
 }
@@ -76,7 +74,6 @@ impl LetStatement {
 
         let ident = parser.expect_peek(TokenType::Ident)?;
         stmt.name.value = ident.literal?;
-
         parser.expect_peek(TokenType::Assign)?;
 
         // TODO: Right now, We are just skipping over all the expressions
@@ -92,8 +89,8 @@ impl LetStatement {
     }
 }
 
-impl ToString for LetStatement {
-    fn to_string(&self) -> String {
+impl Display for LetStatement {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         let mut out = format!("{} {} = ", Self::token_literal(), self.name.value);
 
         if let Some(v) = &self.value {
@@ -101,7 +98,7 @@ impl ToString for LetStatement {
             out.push_str(&a);
         }
         out.push(';');
-        out
+        write!(f, "{}", out)
     }
 }
 
@@ -119,14 +116,13 @@ impl ReturnStatement {
         return Some(stmt);
     }
 
-    // TODO: REMOVE THIS!
     const fn token_literal() -> &'static str {
         "return"
     }
 }
 
-impl ToString for ReturnStatement {
-    fn to_string(&self) -> String {
+impl Display for ReturnStatement {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
         let mut out = String::from(Self::token_literal());
 
         if let Some(v) = &self.return_value {
@@ -135,7 +131,7 @@ impl ToString for ReturnStatement {
             out.push_str(&a);
         }
         out.push(';');
-        out
+        write!(f, "{}", out)
     }
 }
 
@@ -147,7 +143,6 @@ pub struct ExpressionStatement {
 
 impl ExpressionStatement {
     fn parse(parser: &mut Parser, current_token: Token) -> Option<Self> {
-        // let expr = Expression::parse(parser, token.clone(), ExpressionPriority::Lowest)?;
         let stmt = ExpressionStatement {
             token: current_token.clone(),
             expression: Expression::parse(parser, current_token, ExpressionPriority::Lowest)?,
@@ -159,14 +154,14 @@ impl ExpressionStatement {
     }
 }
 
-impl ToString for ExpressionStatement {
-    fn to_string(&self) -> String {
-        self.expression.to_string()
+impl Display for ExpressionStatement {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        write!(f, "{}", self.expression.to_string())
     }
 }
 
-#[derive(Debug, PartialEq)]
-enum ExpressionPriority {
+#[derive(Debug, PartialEq, Copy, PartialOrd, Clone)]
+pub enum ExpressionPriority {
     Lowest = 0,
     Equals = 1,
     LessGreater = 2,
@@ -176,24 +171,46 @@ enum ExpressionPriority {
     Call = 6,
 }
 
-// TODO: Expressions are not going to be a struct so using this here just as a placeholder
-
 #[derive(Debug, PartialEq)]
 pub enum Expression {
     Identifier(Identifier),
     IntegerLiteral(IntegerLiteral),
+    PrefixExpression(PrefixExpression),
+    InfixExpression(InfixExpression),
     // TODO: Temporary placeholder value. Should be removed once this section is done
     None,
 }
 
 impl Expression {
-    fn parse(parser: &mut Parser, token: Token, precedence: ExpressionPriority) -> Option<Self> {
-        let prefix = parser.prefix_parse_fns.get(&token.name)?;
-
-        prefix(parser, token)
+    fn parse(parser: &mut Parser, ctoken: Token, precedence: ExpressionPriority) -> Option<Self> {
+        match parser.prefix_parse_fns.get(&ctoken.name) {
+            Some(prefix) => {
+                let mut left_expr = prefix(parser, ctoken);
+                while !parser.peek_token_is(TokenType::Semicolon)
+                    && precedence < parser.peek_precedence()
+                {
+                    let peek_token = match parser.lexer.peek() {
+                        Some(token) => token.clone(),
+                        None => return left_expr,
+                    };
+                    match parser.infix_parse_fns.get(&peek_token.name) {
+                        Some(infix) => {
+                            let next_token = parser.lexer.next()?;
+                            left_expr = infix(parser, next_token, left_expr.unwrap());
+                        }
+                        None => return left_expr,
+                    };
+                }
+                left_expr
+            }
+            None => {
+                parser.no_prefix_parse_fn_error(&ctoken.name);
+                None
+            }
+        }
     }
 
-    pub fn parse_identifier(parser: &mut Parser, token: Token) -> Option<Self> {
+    pub fn parse_identifier(_parser: &mut Parser, token: Token) -> Option<Self> {
         Some(Self::Identifier(Identifier::new(
             token.name,
             &token.literal?,
@@ -214,12 +231,46 @@ impl Expression {
         Some(Self::IntegerLiteral(IntegerLiteral::new(TokenType::Int, n)))
     }
 
-    fn to_string(&self) -> String {
-        match self {
-            Expression::Identifier(v) => v.to_string(),
-            Expression::IntegerLiteral(v) => v.value.to_string(),
-            Expression::None => "None".into(),
-        }
+    pub fn parse_prefix_expression(parser: &mut Parser, ctoken: Token) -> Option<Self> {
+        let next_token = parser.lexer.next()?;
+        let right_expr = Expression::parse(parser, next_token.clone(), ExpressionPriority::Prefix)?;
+        Some(Expression::PrefixExpression(PrefixExpression {
+            token: ctoken.clone(),
+            operator: ctoken.to_string().into(),
+            right: Box::new(right_expr),
+        }))
+    }
+
+    pub fn parse_infix_expression(
+        parser: &mut Parser,
+        token: Token,
+        left_expr: Self,
+    ) -> Option<Self> {
+        let cprecedence = parser.current_precedence(&token.name);
+        let next_token = parser.lexer.next()?;
+        let right_expr = Expression::parse(parser, next_token, cprecedence)?;
+        Some(Expression::InfixExpression(InfixExpression::new(
+            token.clone(),
+            left_expr,
+            &token.to_string(),
+            right_expr,
+        )))
+    }
+}
+
+impl Display for Expression {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        write!(
+            f,
+            "{}",
+            match self {
+                Expression::Identifier(v) => v.to_string(),
+                Expression::IntegerLiteral(v) => v.value.to_string(),
+                Expression::PrefixExpression(v) => v.to_string(),
+                Expression::InfixExpression(v) => v.to_string(),
+                Expression::None => "None".into(),
+            }
+        )
     }
 }
 
@@ -245,9 +296,11 @@ impl Identifier {
             value: v.to_string(),
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
-        self.value.clone()
+impl Display for Identifier {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        write!(f, "{}", self.value.clone())
     }
 }
 
@@ -266,10 +319,64 @@ impl IntegerLiteral {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub struct PrefixExpression {
+    token: Token,
+    operator: String,
+    right: Box<Expression>,
+}
+
+impl PrefixExpression {
+    pub fn new(token: Token, operator: &str, right: Expression) -> Self {
+        Self {
+            token: token,
+            operator: operator.to_string(),
+            right: Box::new(right),
+        }
+    }
+}
+
+impl Display for PrefixExpression {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        write!(f, "({}{})", self.operator, self.right.to_string())
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct InfixExpression {
+    token: Token,
+    left: Box<Expression>,
+    operator: String,
+    right: Box<Expression>,
+}
+
+impl InfixExpression {
+    pub fn new(token: Token, left: Expression, operator: &str, right: Expression) -> Self {
+        Self {
+            token: token,
+            left: Box::new(left),
+            operator: operator.to_string(),
+            right: Box::new(right),
+        }
+    }
+}
+
+impl Display for InfixExpression {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        write!(
+            f,
+            "({} {} {})",
+            self.left.to_string(),
+            self.operator,
+            self.right.to_string()
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
-        lexer::{Token, TokenType},
+        lexer::TokenType,
         parser::{
             ast::{Expression, Identifier, LetStatement, ReturnStatement, Statement},
             Program,
@@ -298,7 +405,7 @@ mod tests {
         };
         assert_eq!(
             program.to_string(),
-            "let myVar = anotherVar;\nreturn 5;\nreturn;\n"
+            "let myVar = anotherVar;return 5;return;"
         );
     }
 }

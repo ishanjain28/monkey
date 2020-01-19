@@ -2,7 +2,7 @@ pub mod ast;
 use {
     crate::{
         lexer::{Lexer, Token, TokenType},
-        parser::ast::{Expression, Program, Statement},
+        parser::ast::{Expression, ExpressionPriority, Program, Statement},
     },
     std::{
         collections::HashMap,
@@ -12,11 +12,26 @@ use {
 };
 
 type PrefixParseFn = fn(&mut Parser, token: Token) -> Option<Expression>;
-type InfixParseFn = fn(Expression) -> Option<Expression>;
+type InfixParseFn = fn(&mut Parser, Token, Expression) -> Option<Expression>;
+
+lazy_static! {
+    static ref PRECEDENCE_MAP: HashMap<TokenType, ExpressionPriority> = {
+        let mut m = HashMap::new();
+        m.insert(TokenType::Equals, ExpressionPriority::Equals);
+        m.insert(TokenType::NotEquals, ExpressionPriority::Equals);
+        m.insert(TokenType::LessThan, ExpressionPriority::LessGreater);
+        m.insert(TokenType::GreaterThan, ExpressionPriority::LessGreater);
+        m.insert(TokenType::Plus, ExpressionPriority::Sum);
+        m.insert(TokenType::Minus, ExpressionPriority::Sum);
+        m.insert(TokenType::Slash, ExpressionPriority::Product);
+        m.insert(TokenType::Asterisk, ExpressionPriority::Product);
+        m
+    };
+}
 
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
-    errors: Vec<ParserError>,
+    errors: Vec<Error>,
     prefix_parse_fns: HashMap<TokenType, PrefixParseFn>,
     infix_parse_fns: HashMap<TokenType, InfixParseFn>,
 }
@@ -32,23 +47,35 @@ impl<'a> Parser<'a> {
 
         parser.register_prefix(TokenType::Ident, Expression::parse_identifier);
         parser.register_prefix(TokenType::Int, Expression::parse_integer_literal);
+        parser.register_prefix(TokenType::Bang, Expression::parse_prefix_expression);
+        parser.register_prefix(TokenType::Minus, Expression::parse_prefix_expression);
+
+        parser.register_infix(TokenType::Plus, Expression::parse_infix_expression);
+        parser.register_infix(TokenType::Minus, Expression::parse_infix_expression);
+        parser.register_infix(TokenType::Slash, Expression::parse_infix_expression);
+        parser.register_infix(TokenType::Asterisk, Expression::parse_infix_expression);
+        parser.register_infix(TokenType::Equals, Expression::parse_infix_expression);
+        parser.register_infix(TokenType::NotEquals, Expression::parse_infix_expression);
+        parser.register_infix(TokenType::LessThan, Expression::parse_infix_expression);
+        parser.register_infix(TokenType::GreaterThan, Expression::parse_infix_expression);
         parser
     }
 
-    pub fn parse_program(&mut self) -> Program {
+    pub fn parse_program(&mut self) -> Option<Program> {
         let mut program = Program { statements: vec![] };
 
         while let Some(token) = self.lexer.next() {
             if token.name == TokenType::EOF {
                 break;
             }
-            match Statement::parse(self, token) {
-                Some(v) => program.statements.push(v),
-                None => {} // This will happen in case of a parsing error or something
-            }
+
+            match Statement::parse(self, token.clone()) {
+                Some(x) => program.statements.push(x),
+                None => eprintln!("error in generating statement: {:?}", token),
+            };
         }
 
-        program
+        Some(program)
     }
 
     fn peek_token_is(&mut self, token: TokenType) -> bool {
@@ -57,11 +84,6 @@ impl<'a> Parser<'a> {
             None => false,
         }
     }
-
-    // TODO: Remove this. We most likely don't need it anywhere
-    // fn current_token_is(&self, token: TokenType) -> bool {
-    //     false
-    // }
 
     fn expect_peek(&mut self, token: TokenType) -> Option<Token> {
         if self.peek_token_is(token) {
@@ -79,9 +101,12 @@ impl<'a> Parser<'a> {
     fn peek_error(&mut self, et: TokenType, gt: Option<TokenType>) {
         let msg = match gt {
             Some(v) => format!("expected next token to be {:?}, Got {:?} instead", et, v),
-            None => format!("expected next token to be {:?}, Got None instead", et),
+            None => format!(
+                "expected next token to be {}, Got None instead",
+                et.to_string()
+            ),
         };
-        self.errors.push(ParserError { reason: msg });
+        self.errors.push(Error { reason: msg });
     }
 
     fn register_prefix(&mut self, token: TokenType, f: PrefixParseFn) {
@@ -91,13 +116,37 @@ impl<'a> Parser<'a> {
     fn register_infix(&mut self, token: TokenType, f: InfixParseFn) {
         self.infix_parse_fns.insert(token, f);
     }
+
+    fn no_prefix_parse_fn_error(&mut self, token: &TokenType) {
+        self.errors.push(Error {
+            reason: format!("no prefix parse function for {} found", token.to_string()),
+        });
+    }
+
+    fn peek_precedence(&mut self) -> ExpressionPriority {
+        match self.lexer.peek() {
+            Some(token) => match PRECEDENCE_MAP.get(&token.name) {
+                Some(p) => *p,
+                None => ExpressionPriority::Lowest,
+            },
+            None => ExpressionPriority::Lowest,
+        }
+    }
+
+    fn current_precedence(&mut self, token: &TokenType) -> ExpressionPriority {
+        match PRECEDENCE_MAP.get(&token) {
+            Some(p) => *p,
+            None => ExpressionPriority::Lowest,
+        }
+    }
 }
 
-pub struct ParserError {
+#[derive(PartialEq, Debug)]
+pub struct Error {
     reason: String,
 }
 
-impl Display for ParserError {
+impl Display for Error {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), FmtError> {
         write!(fmt, "{}", self.reason)
     }
@@ -107,13 +156,7 @@ impl Display for ParserError {
 mod tests {
     use crate::{
         lexer::{Lexer, Token, TokenType},
-        parser::{
-            ast::{
-                Expression, ExpressionStatement, Identifier, IntegerLiteral, LetStatement, Program,
-                Statement,
-            },
-            Parser,
-        },
+        parser::{ast::*, Parser},
     };
 
     fn check_parser_errors(p: &Parser) {
@@ -135,6 +178,8 @@ mod tests {
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         check_parser_errors(&parser);
+        assert!(program.is_some());
+        let program = program.unwrap();
         assert_eq!(program.statements.len(), 3);
         assert_eq!(
             program,
@@ -170,9 +215,12 @@ mod tests {
         let program = parser.parse_program();
 
         check_parser_errors(&parser);
+        assert!(program.is_some());
+        let program = program.unwrap();
         assert_eq!(program.statements.len(), 3);
         assert_eq!(parser.errors.len(), 0);
     }
+
     #[test]
     fn identifier_expression() {
         let lexer = Lexer::new("foobar;");
@@ -180,6 +228,8 @@ mod tests {
         let program = parser.parse_program();
 
         check_parser_errors(&parser);
+        assert!(program.is_some());
+        let program = program.unwrap();
         assert_eq!(program.statements.len(), 1);
         assert_eq!(
             program.statements,
@@ -196,13 +246,201 @@ mod tests {
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         check_parser_errors(&parser);
+        assert!(program.is_some());
 
         assert_eq!(
-            program.statements,
+            program.unwrap().statements,
             vec![Statement::ExpressionStatement(ExpressionStatement {
                 token: Token::with_value(TokenType::Int, "5"),
                 expression: Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5))
             })]
         );
+    }
+
+    #[test]
+    fn prefix_expressions() {
+        let prefix_tests = [
+            (
+                "!5",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::new(TokenType::Bang),
+                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                        Token::new(TokenType::Bang),
+                        "!",
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
+                    )),
+                })],
+            ),
+            (
+                "-15;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::new(TokenType::Minus),
+                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                        Token::new(TokenType::Minus),
+                        "-",
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 15)),
+                    )),
+                })],
+            ),
+            (
+                "!foobar;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::new(TokenType::Bang),
+                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                        Token::new(TokenType::Bang),
+                        "!",
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "foobar")),
+                    )),
+                })],
+            ),
+            // TODO: Add this test when we add function call parser
+            // (
+            //     "!isGreaterThanZero( 2);",
+            //     vec![Statement::ExpressionStatement(ExpressionStatement {
+            //         token: Token::new(TokenType::Bang),
+            //         expression: Expression::PrefixExpression(PrefixExpression::new(
+            //             Token::new(TokenType::Bang),
+            //             "!",
+            //             Expression::Identifier(Identifier::new(
+            //                 TokenType::Function,
+            //                 "",
+            //             )),
+            //         )),
+            //     })
+        ];
+
+        for test in prefix_tests.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap().statements, test.1);
+        }
+    }
+
+    #[test]
+    fn parsing_infix_expressions() {
+        let infix_tests = [
+            (
+                "5 + 10;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::with_value(TokenType::Int, "5"),
+                    expression: Expression::InfixExpression(InfixExpression::new(
+                        Token::new(TokenType::Plus),
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
+                        "+",
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 10)),
+                    )),
+                })],
+            ),
+            (
+                "5 - 10;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::with_value(TokenType::Int, "5"),
+                    expression: Expression::InfixExpression(InfixExpression::new(
+                        Token::new(TokenType::Minus),
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
+                        "-",
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 10)),
+                    )),
+                })],
+            ),
+            (
+                "5 * 15;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::with_value(TokenType::Int, "5"),
+                    expression: Expression::InfixExpression(InfixExpression::new(
+                        Token::new(TokenType::Asterisk),
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
+                        "*",
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 15)),
+                    )),
+                })],
+            ),
+            (
+                "15 / 3;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::with_value(TokenType::Int, "15"),
+                    expression: Expression::InfixExpression(InfixExpression::new(
+                        Token::new(TokenType::Slash),
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 15)),
+                        "/",
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 3)),
+                    )),
+                })],
+            ),
+            (
+                "5 > 15;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::with_value(TokenType::Int, "5"),
+                    expression: Expression::InfixExpression(InfixExpression::new(
+                        Token::new(TokenType::GreaterThan),
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
+                        ">",
+                        Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 15)),
+                    )),
+                })],
+            ),
+            (
+                "a + b + c;",
+                vec![Statement::ExpressionStatement(ExpressionStatement {
+                    token: Token::with_value(TokenType::Ident, "a"),
+                    expression: Expression::InfixExpression(InfixExpression::new(
+                        Token::new(TokenType::Plus),
+                        Expression::InfixExpression(InfixExpression::new(
+                            Token::new(TokenType::Plus),
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "a")),
+                            "+",
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "b")),
+                        )),
+                        "+",
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "c")),
+                    )),
+                })],
+            ),
+        ];
+        for test in infix_tests.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap().statements, test.1);
+        }
+    }
+
+    #[test]
+    fn test_operator_precedence_parsing() {
+        let test_cases = [
+            ("-a * b", "((-a) * b)"),
+            ("!-a", "(!(-a))"),
+            ("a + b + c", "((a + b) + c)"),
+            ("a + b - c", "((a + b) - c)"),
+            ("a * b * c", "((a * b) * c)"),
+            ("a * b / c", "((a * b) / c)"),
+            ("a + b / c", "(a + (b / c))"),
+            ("a + b * c + d / e - f", "(((a + (b * c)) + (d / e)) - f)"),
+            ("3 + 4; -5 * 5", "(3 + 4)((-5) * 5)"),
+            ("5 > 4 == 3 < 4", "((5 > 4) == (3 < 4))"),
+            ("5 < 4 != 3 > 4", "((5 < 4) != (3 > 4))"),
+            (
+                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+            ),
+            (
+                "3 + 4 * 5 == 3 * 1 + 4 * 5",
+                "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)))",
+            ),
+        ];
+
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap().to_string(), test.1);
+        }
     }
 }
