@@ -601,11 +601,10 @@ impl FunctionLiteral {
 impl Display for FunctionLiteral {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         f.write_fmt(format_args!(
-            "{} {}({}) {}",
-            self.token.name.to_string(),
-            self.token.literal.as_ref().unwrap(),
-            self.parameters.iter().join(","),
-            ""
+            "{}({}) {{ {} }}",
+            self.token.name,
+            self.parameters.iter().join(", "),
+            self.body
         ))
     }
 }

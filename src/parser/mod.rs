@@ -33,7 +33,7 @@ lazy_static! {
 
 pub struct Parser<'a> {
     lexer: Peekable<Lexer<'a>>,
-    errors: Vec<Error>,
+    pub errors: Vec<Error>,
     prefix_parse_fns: HashMap<TokenType, PrefixParseFn>,
     infix_parse_fns: HashMap<TokenType, InfixParseFn>,
 }

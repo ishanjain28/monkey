@@ -86,10 +86,10 @@ impl Display for TokenType {
             TokenType::True => "true",
             TokenType::False => "false",
             TokenType::Return => "return",
-            _ => {
-                eprintln!("{:?}", self);
-                unreachable!()
-            }
+            TokenType::EOF => "EOF",
+            TokenType::Illegal => "illegal",
+            TokenType::Ident => "ident",
+            TokenType::Int => "int",
         })
     }
 }
