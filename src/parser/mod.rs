@@ -15,7 +15,6 @@ type PrefixParseFn = fn(&mut Parser, token: Token) -> Option<Expression>;
 type InfixParseFn = fn(&mut Parser, Token, Expression) -> Option<Expression>;
 
 //TODO: Add Parser tracing so we can easily figure out the call stack hierarchy
-
 lazy_static! {
     static ref PRECEDENCE_MAP: HashMap<TokenType, ExpressionPriority> = {
         let mut m = HashMap::new();
@@ -186,34 +185,74 @@ mod tests {
 
     #[test]
     fn let_statements() {
-        let mut lexer = Lexer::new("let x =5;let y=10; let foobar=538383;");
+        let test_cases = [(
+            "let x =5;let y=10; let foobar=538383;",
+            vec![
+                Statement::Let(LetStatement::with_value(
+                    Identifier::new(TokenType::Let, "x"),
+                    Expression::IntegerLiteral(IntegerLiteral::new(5)),
+                )),
+                Statement::Let(LetStatement::with_value(
+                    Identifier::new(TokenType::Let, "y"),
+                    Expression::IntegerLiteral(IntegerLiteral::new(10)),
+                )),
+                Statement::Let(LetStatement::with_value(
+                    Identifier::new(TokenType::Let, "foobar"),
+                    Expression::IntegerLiteral(IntegerLiteral::new(538383)),
+                )),
+            ],
+        )];
+
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap().statements, test.1);
+        }
+
+        let fail_case = "let x 5; let 10; let 83838383;";
+
+        let lexer = Lexer::new(fail_case);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         check_parser_errors(&parser);
-        assert_eq!(parser.errors.len(), 0);
-        assert!(program.is_some());
-        let program = program.unwrap();
-        assert_eq!(program.statements.len(), 3);
-        assert_eq!(
-            program,
-            Program {
-                statements: vec![
-                    Statement::Let(LetStatement::new(Identifier::new(TokenType::Let, "x"),)),
-                    Statement::Let(LetStatement::new(Identifier::new(TokenType::Let, "y"),)),
-                    Statement::Let(LetStatement::new(Identifier::new(TokenType::Let, "foobar"),))
-                ],
-            }
-        );
-
-        lexer = Lexer::new("let x 5; let 10; let 83838383;");
-        parser = Parser::new(lexer);
-        let _program = parser.parse_program();
-        check_parser_errors(&parser);
         assert_eq!(parser.errors.len(), 3);
+        assert!(program.is_some());
     }
 
     #[test]
     fn return_statements() {
+        let test_cases = [(
+            "return 5; return 10; return add(10);",
+            vec![
+                Statement::Return(ReturnStatement::new(Expression::IntegerLiteral(
+                    IntegerLiteral::new(5),
+                ))),
+                Statement::Return(ReturnStatement::new(Expression::IntegerLiteral(
+                    IntegerLiteral::new(10),
+                ))),
+                Statement::Return(ReturnStatement::new(Expression::CallExpression(
+                    CallExpression::new(
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "add")),
+                        vec![Expression::IntegerLiteral(IntegerLiteral::new(10))],
+                    ),
+                ))),
+            ],
+        )];
+
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap().statements, test.1);
+        }
+
         let lexer = Lexer::new("return 5; return 10; return add(10);");
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
@@ -322,20 +361,23 @@ mod tests {
                     )),
                 ))],
             ),
-            // TODO: Add this test when we add function call parser
-            // (
-            //     "!isGreaterThanZero( 2);",
-            //     vec![Statement::ExpressionStatement(ExpressionStatement {
-            //         token: Token::new(TokenType::Bang),
-            //         expression: Expression::PrefixExpression(PrefixExpression::new(
-            //             Token::new(TokenType::Bang),
-            //             "!",
-            //             Expression::Identifier(Identifier::new(
-            //                 TokenType::Function,
-            //                 "",
-            //             )),
-            //         )),
-            //     })
+            (
+                "!isGreaterThanZero( 2);",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Bang),
+                    Expression::PrefixExpression(PrefixExpression::new(
+                        TokenType::Bang,
+                        "!",
+                        Expression::CallExpression(CallExpression::new(
+                            Expression::Identifier(Identifier::new(
+                                TokenType::Ident,
+                                "isGreaterThanZero",
+                            )),
+                            vec![Expression::IntegerLiteral(IntegerLiteral::new(2))],
+                        )),
+                    )),
+                ))],
+            ),
         ];
 
         for test in prefix_tests.iter() {
@@ -526,30 +568,24 @@ mod tests {
         let test_cases = [
             (
                 "true;",
-                Program {
-                    statements: vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                        Token::new(TokenType::True),
-                        Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
-                    ))],
-                },
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::True),
+                    Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
+                ))],
             ),
             (
                 "false;",
-                Program {
-                    statements: vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                        Token::new(TokenType::False),
-                        Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
-                    ))],
-                },
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::False),
+                    Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
+                ))],
             ),
             (
                 "let foobar = true;",
-                Program {
-                    statements: vec![Statement::Let(LetStatement::with_value(
-                        Identifier::new(TokenType::Let, "foobar"),
-                        None, // TODO: fix this when we complete parsing of let statements
-                    ))],
-                },
+                vec![Statement::Let(LetStatement::with_value(
+                    Identifier::new(TokenType::Let, "foobar"),
+                    Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
+                ))],
             ),
         ];
 
@@ -560,33 +596,31 @@ mod tests {
             check_parser_errors(&parser);
             assert_eq!(parser.errors.len(), 0);
             assert!(program.is_some());
-            assert_eq!(program.unwrap(), test.1);
+            assert_eq!(program.unwrap().statements, test.1);
         }
     }
     #[test]
     fn if_expression() {
         let test_cases = [(
             "if (x > y) { x };",
-            Program {
-                statements: vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::If),
-                    Expression::IfExpression(IfExpression::new(
-                        Expression::InfixExpression(InfixExpression::new(
-                            TokenType::GreaterThan,
-                            Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
-                            ">",
-                            Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
-                        )),
-                        BlockStatement::new(vec![Statement::ExpressionStatement(
-                            ExpressionStatement::new(
-                                Token::with_value(TokenType::Ident, "x"),
-                                Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
-                            ),
-                        )]),
-                        None,
+            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                Token::new(TokenType::If),
+                Expression::IfExpression(IfExpression::new(
+                    Expression::InfixExpression(InfixExpression::new(
+                        TokenType::GreaterThan,
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
+                        ">",
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
                     )),
-                ))],
-            },
+                    BlockStatement::new(vec![Statement::ExpressionStatement(
+                        ExpressionStatement::new(
+                            Token::with_value(TokenType::Ident, "x"),
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
+                        ),
+                    )]),
+                    None,
+                )),
+            ))],
         )];
 
         for test in test_cases.iter() {
@@ -596,38 +630,36 @@ mod tests {
             check_parser_errors(&parser);
             assert_eq!(parser.errors.len(), 0);
             assert!(program.is_some());
-            assert_eq!(program.unwrap(), test.1);
+            assert_eq!(program.unwrap().statements, test.1);
         }
     }
     #[test]
     fn if_else_expression() {
         let test_cases = [(
             "if (x > y) { x } else { y };",
-            Program {
-                statements: vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::If),
-                    Expression::IfExpression(IfExpression::new(
-                        Expression::InfixExpression(InfixExpression::new(
-                            TokenType::GreaterThan,
-                            Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
-                            ">",
-                            Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
-                        )),
-                        BlockStatement::new(vec![Statement::ExpressionStatement(
-                            ExpressionStatement::new(
-                                Token::with_value(TokenType::Ident, "x"),
-                                Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
-                            ),
-                        )]),
-                        Some(BlockStatement::new(vec![Statement::ExpressionStatement(
-                            ExpressionStatement::new(
-                                Token::with_value(TokenType::Ident, "y"),
-                                Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
-                            ),
-                        )])),
+            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                Token::new(TokenType::If),
+                Expression::IfExpression(IfExpression::new(
+                    Expression::InfixExpression(InfixExpression::new(
+                        TokenType::GreaterThan,
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
+                        ">",
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
                     )),
-                ))],
-            },
+                    BlockStatement::new(vec![Statement::ExpressionStatement(
+                        ExpressionStatement::new(
+                            Token::with_value(TokenType::Ident, "x"),
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
+                        ),
+                    )]),
+                    Some(BlockStatement::new(vec![Statement::ExpressionStatement(
+                        ExpressionStatement::new(
+                            Token::with_value(TokenType::Ident, "y"),
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
+                        ),
+                    )])),
+                )),
+            ))],
         )];
 
         for test in test_cases.iter() {
@@ -637,13 +669,12 @@ mod tests {
             check_parser_errors(&parser);
             assert_eq!(parser.errors.len(), 0);
             assert!(program.is_some());
-            assert_eq!(program.unwrap(), test.1);
+            assert_eq!(program.unwrap().statements, test.1);
         }
     }
 
     #[test]
     fn function_literal_parsing() {
-        // TODO: Figure out why are there inconsistencies in BlockStatements Token
         let test_cases = [
             (
                 "fn(a,b) {x + y;}",
@@ -767,7 +798,6 @@ mod tests {
     }
     #[test]
     fn call_expression_parsing() {
-        // TODO: Figure out why are there inconsistencies in BlockStatements Token
         let test_cases = [
             (
                 "add(1, 2 * 3, 4 + 5);",
@@ -930,7 +960,6 @@ mod tests {
     }
     #[test]
     fn call_expression_parsing_string() {
-        // TODO: Figure out why are there inconsistencies in BlockStatements Token
         let test_cases = [
             ("add(1, 2 * 3, 4 + 5);", "add(1, (2 * 3), (4 + 5))"),
             (

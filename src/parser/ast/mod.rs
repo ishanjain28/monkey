@@ -1,4 +1,3 @@
-// TODO: Maybe implement String method to pretty print all AST nodes
 use {
     crate::{
         lexer::{Token, TokenType},
@@ -71,26 +70,26 @@ impl LetStatement {
     pub fn new(name: Identifier) -> Self {
         Self { name, value: None }
     }
-    pub fn with_value(name: Identifier, value: Option<Expression>) -> Self {
-        Self { name, value }
+    pub fn with_value(name: Identifier, value: Expression) -> Self {
+        Self {
+            name,
+            value: Some(value),
+        }
     }
-    // TODO: Implement code to parse let statement
+
     pub fn parse(parser: &mut Parser) -> Option<Self> {
-        let mut stmt = LetStatement {
-            name: Identifier::new(TokenType::Let, "placeholder_value"),
-            value: None,
-        };
-
         let ident = parser.expect_peek(TokenType::Ident)?;
-        stmt.name.value = ident.literal?;
+
         parser.expect_peek(TokenType::Assign)?;
+        let ntoken = parser.lexer.next()?;
+        let expr = Expression::parse(parser, ntoken, ExpressionPriority::Lowest);
 
-        // TODO: Right now, We are just skipping over all the expressions
-        // That'll come later
-        // Also, Right now, It hangs forever in case there is no semicolon at the end
-        while parser.lexer.next() != Some(Token::new(TokenType::Semicolon)) {}
+        parser.expect_peek(TokenType::Semicolon);
 
-        Some(stmt)
+        Some(Self {
+            name: Identifier::new(TokenType::Let, &ident.literal?),
+            value: expr,
+        })
     }
 
     const fn token_literal() -> &'static str {
@@ -117,12 +116,17 @@ pub struct ReturnStatement {
 }
 
 impl ReturnStatement {
+    pub fn new(expr: Expression) -> Self {
+        ReturnStatement {
+            return_value: Some(expr),
+        }
+    }
+
     fn parse(parser: &mut Parser) -> Option<Self> {
-        let stmt = ReturnStatement {
-            return_value: Some(Expression::None),
-        };
-        while parser.lexer.next() != Some(Token::new(TokenType::Semicolon)) {}
-        return Some(stmt);
+        let token = parser.lexer.next()?;
+        let expr = Expression::parse(parser, token, ExpressionPriority::Lowest);
+        parser.expect_peek(TokenType::Semicolon);
+        return Some(ReturnStatement { return_value: expr });
     }
 
     const fn token_literal() -> &'static str {
@@ -193,8 +197,6 @@ pub enum Expression {
     IfExpression(IfExpression),
     FunctionExpression(FunctionLiteral),
     CallExpression(CallExpression),
-    // TODO: Temporary placeholder value. Should be removed once this section is done
-    None,
 }
 
 impl Expression {
@@ -249,7 +251,6 @@ impl Display for Expression {
             Expression::IfExpression(v) => v.to_string(),
             Expression::FunctionExpression(v) => v.to_string(),
             Expression::CallExpression(v) => v.to_string(),
-            Expression::None => "None".into(),
         };
 
         f.write_str(&value)
