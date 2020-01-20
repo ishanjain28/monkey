@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fmt::{Display, Formatter, Result as FmtResult},
     iter::Peekable,
     str::{self, Chars},
 };
@@ -59,9 +60,9 @@ pub enum TokenType {
     Return,
 }
 
-impl TokenType {
-    pub fn to_string(&self) -> &'static str {
-        match self {
+impl Display for TokenType {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        f.write_str(match self {
             TokenType::Assign => "=",
             TokenType::Plus => "+",
             TokenType::Asterisk => "*",
@@ -89,7 +90,7 @@ impl TokenType {
                 eprintln!("{:?}", self);
                 unreachable!()
             }
-        }
+        })
     }
 }
 
@@ -117,9 +118,9 @@ impl Token {
     }
 }
 
-impl ToString for Token {
-    fn to_string(&self) -> String {
-        self.name.to_string().into()
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        f.write_fmt(format_args!("{}", self.name))
     }
 }
 

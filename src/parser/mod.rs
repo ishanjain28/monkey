@@ -2,7 +2,7 @@ pub mod ast;
 use {
     crate::{
         lexer::{Lexer, Token, TokenType},
-        parser::ast::{Expression, ExpressionPriority, Program, Statement},
+        parser::ast::*,
     },
     std::{
         collections::HashMap,
@@ -47,23 +47,24 @@ impl<'a> Parser<'a> {
             infix_parse_fns: HashMap::new(),
         };
 
-        parser.register_prefix(TokenType::Ident, Expression::parse_identifier);
-        parser.register_prefix(TokenType::Int, Expression::parse_integer_literal);
-        parser.register_prefix(TokenType::Bang, Expression::parse_prefix_expression);
-        parser.register_prefix(TokenType::Minus, Expression::parse_prefix_expression);
+        parser.register_prefix(TokenType::Ident, Identifier::parse);
+        parser.register_prefix(TokenType::Int, IntegerLiteral::parse);
+        parser.register_prefix(TokenType::Bang, PrefixExpression::parse);
+        parser.register_prefix(TokenType::Minus, PrefixExpression::parse);
         parser.register_prefix(TokenType::True, Expression::parse_boolean);
         parser.register_prefix(TokenType::False, Expression::parse_boolean);
         parser.register_prefix(TokenType::LParen, Expression::parse_grouped_expression);
         parser.register_prefix(TokenType::If, Expression::parse_if_expression);
+        parser.register_prefix(TokenType::Function, FunctionLiteral::parse);
 
-        parser.register_infix(TokenType::Plus, Expression::parse_infix_expression);
-        parser.register_infix(TokenType::Minus, Expression::parse_infix_expression);
-        parser.register_infix(TokenType::Slash, Expression::parse_infix_expression);
-        parser.register_infix(TokenType::Asterisk, Expression::parse_infix_expression);
-        parser.register_infix(TokenType::Equals, Expression::parse_infix_expression);
-        parser.register_infix(TokenType::NotEquals, Expression::parse_infix_expression);
-        parser.register_infix(TokenType::LessThan, Expression::parse_infix_expression);
-        parser.register_infix(TokenType::GreaterThan, Expression::parse_infix_expression);
+        parser.register_infix(TokenType::Plus, InfixExpression::parse);
+        parser.register_infix(TokenType::Minus, InfixExpression::parse);
+        parser.register_infix(TokenType::Slash, InfixExpression::parse);
+        parser.register_infix(TokenType::Asterisk, InfixExpression::parse);
+        parser.register_infix(TokenType::Equals, InfixExpression::parse);
+        parser.register_infix(TokenType::NotEquals, InfixExpression::parse);
+        parser.register_infix(TokenType::LessThan, InfixExpression::parse);
+        parser.register_infix(TokenType::GreaterThan, InfixExpression::parse);
         parser
     }
 
@@ -153,8 +154,8 @@ pub struct Error {
 }
 
 impl Display for Error {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), FmtError> {
-        write!(fmt, "{}", self.reason)
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        f.write_str(&self.reason)
     }
 }
 
@@ -192,18 +193,9 @@ mod tests {
             program,
             Program {
                 statements: vec![
-                    Statement::Let(LetStatement {
-                        name: Identifier::new(TokenType::Let, "x"),
-                        value: None
-                    }),
-                    Statement::Let(LetStatement {
-                        name: Identifier::new(TokenType::Let, "y"),
-                        value: None
-                    }),
-                    Statement::Let(LetStatement {
-                        name: Identifier::new(TokenType::Let, "foobar"),
-                        value: None
-                    })
+                    Statement::Let(LetStatement::new(Identifier::new(TokenType::Let, "x"),)),
+                    Statement::Let(LetStatement::new(Identifier::new(TokenType::Let, "y"),)),
+                    Statement::Let(LetStatement::new(Identifier::new(TokenType::Let, "foobar"),))
                 ],
             }
         );
@@ -242,10 +234,10 @@ mod tests {
         assert_eq!(program.statements.len(), 1);
         assert_eq!(
             program.statements,
-            vec![Statement::ExpressionStatement(ExpressionStatement {
-                token: Token::with_value(TokenType::Ident, "foobar"),
-                expression: Expression::Identifier(Identifier::new(TokenType::Ident, "foobar")),
-            })]
+            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                Token::with_value(TokenType::Ident, "foobar"),
+                Expression::Identifier(Identifier::new(TokenType::Ident, "foobar")),
+            ))]
         );
     }
 
@@ -260,10 +252,10 @@ mod tests {
 
         assert_eq!(
             program.unwrap().statements,
-            vec![Statement::ExpressionStatement(ExpressionStatement {
-                token: Token::with_value(TokenType::Int, "5"),
-                expression: Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5))
-            })]
+            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                Token::with_value(TokenType::Int, "5"),
+                Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5))
+            ))]
         );
     }
 
@@ -272,58 +264,58 @@ mod tests {
         let prefix_tests = [
             (
                 "!5",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::new(TokenType::Bang),
-                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Bang),
+                    Expression::PrefixExpression(PrefixExpression::new(
                         Token::new(TokenType::Bang),
                         "!",
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
                     )),
-                })],
+                ))],
             ),
             (
                 "-15;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::new(TokenType::Minus),
-                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Minus),
+                    Expression::PrefixExpression(PrefixExpression::new(
                         Token::new(TokenType::Minus),
                         "-",
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 15)),
                     )),
-                })],
+                ))],
             ),
             (
                 "!foobar;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::new(TokenType::Bang),
-                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Bang),
+                    Expression::PrefixExpression(PrefixExpression::new(
                         Token::new(TokenType::Bang),
                         "!",
                         Expression::Identifier(Identifier::new(TokenType::Ident, "foobar")),
                     )),
-                })],
+                ))],
             ),
             (
                 "!true;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::new(TokenType::Bang),
-                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Bang),
+                    Expression::PrefixExpression(PrefixExpression::new(
                         Token::new(TokenType::Bang),
                         "!",
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
                     )),
-                })],
+                ))],
             ),
             (
                 "!false;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::new(TokenType::Bang),
-                    expression: Expression::PrefixExpression(PrefixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Bang),
+                    Expression::PrefixExpression(PrefixExpression::new(
                         Token::new(TokenType::Bang),
                         "!",
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
                     )),
-                })],
+                ))],
             ),
             // TODO: Add this test when we add function call parser
             // (
@@ -357,69 +349,69 @@ mod tests {
         let infix_tests = [
             (
                 "5 + 10;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::with_value(TokenType::Int, "5"),
-                    expression: Expression::InfixExpression(InfixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::with_value(TokenType::Int, "5"),
+                    Expression::InfixExpression(InfixExpression::new(
                         Token::new(TokenType::Plus),
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
                         "+",
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 10)),
                     )),
-                })],
+                ))],
             ),
             (
                 "5 - 10;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::with_value(TokenType::Int, "5"),
-                    expression: Expression::InfixExpression(InfixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::with_value(TokenType::Int, "5"),
+                    Expression::InfixExpression(InfixExpression::new(
                         Token::new(TokenType::Minus),
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
                         "-",
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 10)),
                     )),
-                })],
+                ))],
             ),
             (
                 "5 * 15;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::with_value(TokenType::Int, "5"),
-                    expression: Expression::InfixExpression(InfixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::with_value(TokenType::Int, "5"),
+                    Expression::InfixExpression(InfixExpression::new(
                         Token::new(TokenType::Asterisk),
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
                         "*",
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 15)),
                     )),
-                })],
+                ))],
             ),
             (
                 "15 / 3;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::with_value(TokenType::Int, "15"),
-                    expression: Expression::InfixExpression(InfixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::with_value(TokenType::Int, "15"),
+                    Expression::InfixExpression(InfixExpression::new(
                         Token::new(TokenType::Slash),
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 15)),
                         "/",
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 3)),
                     )),
-                })],
+                ))],
             ),
             (
                 "5 > 15;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::with_value(TokenType::Int, "5"),
-                    expression: Expression::InfixExpression(InfixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::with_value(TokenType::Int, "5"),
+                    Expression::InfixExpression(InfixExpression::new(
                         Token::new(TokenType::GreaterThan),
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 5)),
                         ">",
                         Expression::IntegerLiteral(IntegerLiteral::new(TokenType::Int, 15)),
                     )),
-                })],
+                ))],
             ),
             (
                 "a + b + c;",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::with_value(TokenType::Ident, "a"),
-                    expression: Expression::InfixExpression(InfixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::with_value(TokenType::Ident, "a"),
+                    Expression::InfixExpression(InfixExpression::new(
                         Token::new(TokenType::Plus),
                         Expression::InfixExpression(InfixExpression::new(
                             Token::new(TokenType::Plus),
@@ -430,43 +422,43 @@ mod tests {
                         "+",
                         Expression::Identifier(Identifier::new(TokenType::Ident, "c")),
                     )),
-                })],
+                ))],
             ),
             (
                 "true == true",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::new(TokenType::True),
-                    expression: Expression::InfixExpression(InfixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::True),
+                    Expression::InfixExpression(InfixExpression::new(
                         Token::new(TokenType::Equals),
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
                         "==",
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
                     )),
-                })],
+                ))],
             ),
             (
                 "true != false",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::new(TokenType::True),
-                    expression: Expression::InfixExpression(InfixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::True),
+                    Expression::InfixExpression(InfixExpression::new(
                         Token::new(TokenType::NotEquals),
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
                         "!=",
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
                     )),
-                })],
+                ))],
             ),
             (
                 "false == false",
-                vec![Statement::ExpressionStatement(ExpressionStatement {
-                    token: Token::new(TokenType::False),
-                    expression: Expression::InfixExpression(InfixExpression::new(
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::False),
+                    Expression::InfixExpression(InfixExpression::new(
                         Token::new(TokenType::Equals),
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
                         "==",
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
                     )),
-                })],
+                ))],
             ),
         ];
         for test in infix_tests.iter() {
@@ -548,7 +540,7 @@ mod tests {
             (
                 "let foobar = true;",
                 Program {
-                    statements: vec![Statement::Let(LetStatement::new(
+                    statements: vec![Statement::Let(LetStatement::with_value(
                         Identifier::new(TokenType::Let, "foobar"),
                         None, // TODO: fix this when we complete parsing of let statements
                     ))],
@@ -583,13 +575,10 @@ mod tests {
                         )),
                         BlockStatement::new(
                             Token::with_value(TokenType::Ident, "x"),
-                            vec![Statement::ExpressionStatement(ExpressionStatement {
-                                token: Token::with_value(TokenType::Ident, "x"),
-                                expression: Expression::Identifier(Identifier::new(
-                                    TokenType::Ident,
-                                    "x",
-                                )),
-                            })],
+                            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                                Token::with_value(TokenType::Ident, "x"),
+                                Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
+                            ))],
                         ),
                         None,
                     )),
@@ -624,23 +613,20 @@ mod tests {
                         )),
                         BlockStatement::new(
                             Token::with_value(TokenType::Ident, "x"),
-                            vec![Statement::ExpressionStatement(ExpressionStatement {
-                                token: Token::with_value(TokenType::Ident, "x"),
-                                expression: Expression::Identifier(Identifier::new(
-                                    TokenType::Ident,
-                                    "x",
-                                )),
-                            })],
+                            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                                Token::with_value(TokenType::Ident, "x"),
+                                Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
+                            ))],
                         ),
                         Some(BlockStatement::new(
+                            // TODO: Not sure if this is the right token to have here.
+                            // Since, It's a block statement parser, I believe it *should* have the first token it encounters in the block
+                            // Else is dealt with before the block starts so, maybe this is not the right token to have here. Will revisit later
                             Token::new(TokenType::Else),
-                            vec![Statement::ExpressionStatement(ExpressionStatement {
-                                token: Token::with_value(TokenType::Ident, "y"),
-                                expression: Expression::Identifier(Identifier::new(
-                                    TokenType::Ident,
-                                    "y",
-                                )),
-                            })],
+                            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                                Token::with_value(TokenType::Ident, "y"),
+                                Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
+                            ))],
                         )),
                     )),
                 ))],
@@ -655,6 +641,132 @@ mod tests {
             assert_eq!(parser.errors.len(), 0);
             assert!(program.is_some());
             assert_eq!(program.unwrap(), test.1);
+        }
+    }
+
+    #[test]
+    fn function_literal_expression() {
+        let test_cases = [
+            (
+                "fn(a,b) {x + y;}",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Function),
+                    Expression::FunctionExpression(FunctionLiteral::new(
+                        Token::new(TokenType::Function),
+                        vec![
+                            Identifier::new(TokenType::Ident, "a"),
+                            Identifier::new(TokenType::Ident, "b"),
+                        ],
+                        BlockStatement::new(
+                            Token::with_value(TokenType::Ident, "x"),
+                            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                                Token::with_value(TokenType::Ident, "x"),
+                                Expression::InfixExpression(InfixExpression::new(
+                                    Token::new(TokenType::Plus),
+                                    Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
+                                    "+",
+                                    Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
+                                )),
+                            ))],
+                        ),
+                    )),
+                ))],
+            ),
+            (
+                "fn() {}",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Function),
+                    Expression::FunctionExpression(FunctionLiteral::new(
+                        Token::new(TokenType::Function),
+                        vec![],
+                        BlockStatement::new(Token::new(TokenType::RBrace), vec![]),
+                    )),
+                ))],
+            ),
+            (
+                "fn(x,ya,z) {}",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Function),
+                    Expression::FunctionExpression(FunctionLiteral::new(
+                        Token::new(TokenType::Function),
+                        vec![
+                            Identifier::new(TokenType::Ident, "x"),
+                            Identifier::new(TokenType::Ident, "ya"),
+                            Identifier::new(TokenType::Ident, "z"),
+                        ],
+                        BlockStatement::new(Token::new(TokenType::RBrace), vec![]),
+                    )),
+                ))],
+            ),
+            (
+                "fn(a) {}",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Function),
+                    Expression::FunctionExpression(FunctionLiteral::new(
+                        Token::new(TokenType::Function),
+                        vec![Identifier::new(TokenType::Ident, "a")],
+                        BlockStatement::new(Token::new(TokenType::RBrace), vec![]),
+                    )),
+                ))],
+            ),
+            (
+                "fn(a,b,abc) {(x + y) * (a -b);}",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::new(TokenType::Function),
+                    Expression::FunctionExpression(FunctionLiteral::new(
+                        Token::new(TokenType::Function),
+                        vec![
+                            Identifier::new(TokenType::Ident, "a"),
+                            Identifier::new(TokenType::Ident, "b"),
+                            Identifier::new(TokenType::Ident, "abc"),
+                        ],
+                        BlockStatement::new(
+                            Token::new(TokenType::LParen),
+                            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                                Token::new(TokenType::LParen),
+                                Expression::InfixExpression(InfixExpression::new(
+                                    Token::new(TokenType::Asterisk),
+                                    Expression::InfixExpression(InfixExpression::new(
+                                        Token::new(TokenType::Plus),
+                                        Expression::Identifier(Identifier::new(
+                                            TokenType::Ident,
+                                            "x",
+                                        )),
+                                        "+",
+                                        Expression::Identifier(Identifier::new(
+                                            TokenType::Ident,
+                                            "y",
+                                        )),
+                                    )),
+                                    "*",
+                                    Expression::InfixExpression(InfixExpression::new(
+                                        Token::new(TokenType::Minus),
+                                        Expression::Identifier(Identifier::new(
+                                            TokenType::Ident,
+                                            "a",
+                                        )),
+                                        "-",
+                                        Expression::Identifier(Identifier::new(
+                                            TokenType::Ident,
+                                            "b",
+                                        )),
+                                    )),
+                                )),
+                            ))],
+                        ),
+                    )),
+                ))],
+            ),
+        ];
+
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap().statements, test.1);
         }
     }
 }

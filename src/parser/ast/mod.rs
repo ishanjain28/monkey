@@ -4,10 +4,11 @@ use {
         lexer::{Token, TokenType},
         parser::{Error as ParserError, Parser},
     },
+    itertools::Itertools,
     std::{
         cmp::PartialOrd,
         convert::From,
-        fmt::{Display, Error as FmtError, Formatter},
+        fmt::{Display, Formatter, Result as FmtResult},
     },
 };
 
@@ -17,13 +18,13 @@ pub struct Program {
 }
 
 impl Display for Program {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let mut out = String::new();
 
         for statement in &self.statements {
             out.push_str(&statement.to_string());
         }
-        write!(f, "{}", out)
+        f.write_str(&out)
     }
 }
 
@@ -47,13 +48,13 @@ impl<'a> Statement {
     }
 }
 
-impl ToString for Statement {
-    fn to_string(&self) -> String {
+impl Display for Statement {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         match self {
-            Statement::Let(v) => v.to_string(),
-            Statement::Return(v) => v.to_string(),
-            Statement::ExpressionStatement(v) => v.to_string(),
-            Statement::BlockStatement(v) => v.to_string(),
+            Statement::Let(v) => f.write_str(&v.to_string()),
+            Statement::Return(v) => f.write_str(&v.to_string()),
+            Statement::ExpressionStatement(v) => f.write_str(&v.to_string()),
+            Statement::BlockStatement(v) => f.write_str(&v.to_string()),
         }
     }
 }
@@ -61,13 +62,16 @@ impl ToString for Statement {
 #[derive(Debug, PartialEq)]
 pub struct LetStatement {
     // name field is to store the identifier of the binding
-    pub name: Identifier,
+    name: Identifier,
     // value is to store the expression that'll produce value
-    pub value: Option<Expression>,
+    value: Option<Expression>,
 }
 
 impl LetStatement {
-    pub fn new(name: Identifier, value: Option<Expression>) -> Self {
+    pub fn new(name: Identifier) -> Self {
+        Self { name, value: None }
+    }
+    pub fn with_value(name: Identifier, value: Option<Expression>) -> Self {
         Self { name, value }
     }
     // TODO: Implement code to parse let statement
@@ -95,7 +99,7 @@ impl LetStatement {
 }
 
 impl Display for LetStatement {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let mut out = format!("{} {} = ", Self::token_literal(), self.name.value);
 
         if let Some(v) = &self.value {
@@ -103,7 +107,7 @@ impl Display for LetStatement {
             out.push_str(&a);
         }
         out.push(';');
-        write!(f, "{}", out)
+        f.write_str(&out)
     }
 }
 
@@ -127,7 +131,7 @@ impl ReturnStatement {
 }
 
 impl Display for ReturnStatement {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let mut out = String::from(Self::token_literal());
 
         if let Some(v) = &self.return_value {
@@ -136,14 +140,14 @@ impl Display for ReturnStatement {
             out.push_str(&a);
         }
         out.push(';');
-        write!(f, "{}", out)
+        f.write_str(&out)
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct ExpressionStatement {
-    pub token: Token,
-    pub expression: Expression,
+    token: Token,
+    expression: Expression,
 }
 
 impl ExpressionStatement {
@@ -162,9 +166,9 @@ impl ExpressionStatement {
     }
 }
 
-impl ToString for ExpressionStatement {
-    fn to_string(&self) -> String {
-        String::from(self.expression.to_string())
+impl Display for ExpressionStatement {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        f.write_str(&self.expression.to_string())
     }
 }
 
@@ -187,6 +191,7 @@ pub enum Expression {
     InfixExpression(InfixExpression),
     BooleanExpression(BooleanExpression),
     IfExpression(IfExpression),
+    FunctionExpression(FunctionLiteral),
     // TODO: Temporary placeholder value. Should be removed once this section is done
     None,
 }
@@ -218,26 +223,6 @@ impl Expression {
                 None
             }
         }
-    }
-
-    pub fn parse_identifier(_parser: &mut Parser, token: Token) -> Option<Self> {
-        Some(Self::Identifier(Identifier::new(
-            token.name,
-            &token.literal?,
-        )))
-    }
-
-    pub fn parse_integer_literal(parser: &mut Parser, token: Token) -> Option<Self> {
-        let n = match token.literal?.parse::<i64>() {
-            Ok(v) => v,
-            Err(e) => {
-                parser.errors.push(ParserError {
-                    reason: e.to_string(),
-                });
-                return None;
-            }
-        };
-        Some(Self::IntegerLiteral(IntegerLiteral::new(TokenType::Int, n)))
     }
 
     pub fn parse_boolean(_parser: &mut Parser, token: Token) -> Option<Self> {
@@ -295,49 +280,22 @@ impl Expression {
             )))
         }
     }
-
-    pub fn parse_prefix_expression(parser: &mut Parser, ctoken: Token) -> Option<Self> {
-        let next_token = parser.lexer.next()?;
-        let right_expr = Expression::parse(parser, next_token.clone(), ExpressionPriority::Prefix)?;
-        Some(Expression::PrefixExpression(PrefixExpression {
-            token: ctoken.clone(),
-            operator: ctoken.to_string().into(),
-            right: Box::new(right_expr),
-        }))
-    }
-
-    pub fn parse_infix_expression(
-        parser: &mut Parser,
-        token: Token,
-        left_expr: Self,
-    ) -> Option<Self> {
-        let cprecedence = parser.current_precedence(&token.name);
-        let next_token = parser.lexer.next()?;
-        let right_expr = Expression::parse(parser, next_token, cprecedence)?;
-        Some(Expression::InfixExpression(InfixExpression::new(
-            token.clone(),
-            left_expr,
-            &token.to_string(),
-            right_expr,
-        )))
-    }
 }
 
 impl Display for Expression {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        write!(
-            f,
-            "{}",
-            match self {
-                Expression::Identifier(v) => v.to_string(),
-                Expression::IntegerLiteral(v) => v.value.to_string(),
-                Expression::PrefixExpression(v) => v.to_string(),
-                Expression::InfixExpression(v) => v.to_string(),
-                Expression::BooleanExpression(v) => v.to_string(),
-                Expression::IfExpression(v) => v.to_string(),
-                Expression::None => "None".into(),
-            }
-        )
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        let value = match self {
+            Expression::Identifier(v) => v.to_string(),
+            Expression::IntegerLiteral(v) => v.value.to_string(),
+            Expression::PrefixExpression(v) => v.to_string(),
+            Expression::InfixExpression(v) => v.to_string(),
+            Expression::BooleanExpression(v) => v.to_string(),
+            Expression::IfExpression(v) => v.to_string(),
+            Expression::FunctionExpression(v) => v.to_string(),
+            Expression::None => "None".into(),
+        };
+
+        f.write_str(&value)
     }
 }
 
@@ -352,8 +310,8 @@ impl From<&Expression> for String {
 // but an identifier *can* produce value when used on rhs, e.g. let x = y; Here `y` is producing a value
 #[derive(Debug, PartialEq)]
 pub struct Identifier {
-    pub token: TokenType,
-    pub value: String,
+    token: TokenType,
+    value: String,
 }
 
 impl Identifier {
@@ -363,11 +321,17 @@ impl Identifier {
             value: v.to_string(),
         }
     }
+    pub fn parse(_parser: &mut Parser, token: Token) -> Option<Expression> {
+        Some(Expression::Identifier(Identifier::new(
+            token.name,
+            &token.literal?,
+        )))
+    }
 }
 
 impl Display for Identifier {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        write!(f, "{}", self.value.clone())
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        f.write_str(&self.value)
     }
 }
 
@@ -383,6 +347,21 @@ impl IntegerLiteral {
             token: token,
             value: v,
         }
+    }
+    pub fn parse(parser: &mut Parser, token: Token) -> Option<Expression> {
+        let n = match token.literal?.parse::<i64>() {
+            Ok(v) => v,
+            Err(e) => {
+                parser.errors.push(ParserError {
+                    reason: e.to_string(),
+                });
+                return None;
+            }
+        };
+        Some(Expression::IntegerLiteral(IntegerLiteral::new(
+            TokenType::Int,
+            n,
+        )))
     }
 }
 
@@ -401,11 +380,25 @@ impl PrefixExpression {
             right: Box::new(right),
         }
     }
+
+    pub fn parse(parser: &mut Parser, ctoken: Token) -> Option<Expression> {
+        let next_token = parser.lexer.next()?;
+        let right_expr = Expression::parse(parser, next_token.clone(), ExpressionPriority::Prefix)?;
+        Some(Expression::PrefixExpression(PrefixExpression {
+            token: ctoken.clone(),
+            operator: ctoken.to_string().into(),
+            right: Box::new(right_expr),
+        }))
+    }
 }
 
 impl Display for PrefixExpression {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        write!(f, "({}{})", self.operator, self.right.to_string())
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        f.write_fmt(format_args!(
+            "({}{})",
+            self.operator,
+            self.right.to_string()
+        ))
     }
 }
 
@@ -426,17 +419,27 @@ impl InfixExpression {
             right: Box::new(right),
         }
     }
+    pub fn parse(parser: &mut Parser, token: Token, left_expr: Expression) -> Option<Expression> {
+        let cprecedence = parser.current_precedence(&token.name);
+        let next_token = parser.lexer.next()?;
+        let right_expr = Expression::parse(parser, next_token, cprecedence)?;
+        Some(Expression::InfixExpression(InfixExpression::new(
+            token.clone(),
+            left_expr,
+            &token.to_string(),
+            right_expr,
+        )))
+    }
 }
 
 impl Display for InfixExpression {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        write!(
-            f,
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        f.write_fmt(format_args!(
             "({} {} {})",
             self.left.to_string(),
             self.operator,
-            self.right.to_string()
-        )
+            self.right.to_string(),
+        ))
     }
 }
 
@@ -456,8 +459,8 @@ impl BooleanExpression {
 }
 
 impl Display for BooleanExpression {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
-        write!(f, "{}", self.value)
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        f.write_str(&self.value.to_string())
     }
 }
 
@@ -485,8 +488,8 @@ impl IfExpression {
     }
 }
 
-impl ToString for IfExpression {
-    fn to_string(&self) -> String {
+impl Display for IfExpression {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let mut out = format!(
             "if {} {{ {} }} ",
             self.condition.to_string(),
@@ -495,7 +498,7 @@ impl ToString for IfExpression {
         if let Some(alternative) = &self.alternative {
             out += &format!("else {{ {} }}", alternative.to_string());
         }
-        out
+        f.write_str(&out)
     }
 }
 
@@ -534,14 +537,89 @@ impl BlockStatement {
     }
 }
 
-impl ToString for BlockStatement {
-    fn to_string(&self) -> String {
+impl Display for BlockStatement {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let mut out = String::new();
 
         for stmt in &self.statements {
             out.push_str(&stmt.to_string());
         }
-        out
+        f.write_str(&out)
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct FunctionLiteral {
+    token: Token,
+    parameters: Vec<Identifier>,
+    body: BlockStatement,
+}
+
+impl FunctionLiteral {
+    pub fn new(token: Token, parameters: Vec<Identifier>, body: BlockStatement) -> Self {
+        Self {
+            token,
+            parameters,
+            body,
+        }
+    }
+    pub fn parse(parser: &mut Parser, ctoken: Token) -> Option<Expression> {
+        if parser.expect_peek(TokenType::LParen).is_none() {
+            return None;
+        }
+        let ntoken = parser.lexer.peek()?.clone();
+        let parameters = FunctionLiteral::parse_function_parameters(parser, ntoken)?;
+
+        if parser.expect_peek(TokenType::LBrace).is_none() {
+            return None;
+        }
+
+        let ntoken = parser.lexer.peek()?.clone();
+
+        let body = BlockStatement::parse(parser, ntoken)?;
+
+        Some(Expression::FunctionExpression(Self {
+            token: ctoken,
+            parameters,
+            body,
+        }))
+    }
+
+    fn parse_function_parameters(parser: &mut Parser, ctoken: Token) -> Option<Vec<Identifier>> {
+        let mut out = vec![];
+
+        if parser.peek_token_is(TokenType::RParen) {
+            parser.lexer.next();
+            Some(out)
+        } else {
+            let ntoken = parser.lexer.next()?;
+            let ident = Identifier::new(ntoken.name, &ntoken.literal?);
+            out.push(ident);
+
+            while parser.peek_token_is(TokenType::Comma) {
+                parser.lexer.next();
+                let token = parser.lexer.next()?;
+                let ident = Identifier::new(token.name, &token.literal?);
+                out.push(ident);
+            }
+
+            if parser.expect_peek(TokenType::RParen).is_none() {
+                return None;
+            }
+
+            Some(out)
+        }
+    }
+}
+impl Display for FunctionLiteral {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        f.write_fmt(format_args!(
+            "{} {}({}) {}",
+            self.token.name.to_string(),
+            self.token.literal.as_ref().unwrap(),
+            self.parameters.iter().map(|x| x.to_string()).join(","),
+            ""
+        ))
     }
 }
 
