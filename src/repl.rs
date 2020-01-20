@@ -29,13 +29,10 @@ fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
             print_parser_errors(&mut out, &parser.errors).unwrap();
             continue;
         }
-        match program {
-            Some(prg) => {
-                for stmt in &prg.statements {
-                    out.write_fmt(format_args!("{}\n", stmt)).unwrap();
-                }
+        if let Some(program) = program {
+            for stmt in &program.statements {
+                out.write_fmt(format_args!("{}\n", stmt)).unwrap();
             }
-            None => (),
         };
     }
 }

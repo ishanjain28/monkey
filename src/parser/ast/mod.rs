@@ -84,22 +84,18 @@ impl LetStatement {
         let ntoken = parser.lexer.next()?;
         let expr = Expression::parse(parser, ntoken, ExpressionPriority::Lowest);
 
-        parser.expect_peek(TokenType::Semicolon);
+        parser.expect_peek(TokenType::Semicolon)?;
 
         Some(Self {
             name: Identifier::new(TokenType::Let, &ident.literal?),
             value: expr,
         })
     }
-
-    const fn token_literal() -> &'static str {
-        "let"
-    }
 }
 
 impl Display for LetStatement {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        let mut out = format!("{} {} = ", Self::token_literal(), self.name.value);
+        let mut out = format!("{} {} = ", TokenType::Let.to_string(), self.name.value);
 
         if let Some(v) = &self.value {
             let a: String = v.into();
@@ -125,18 +121,14 @@ impl ReturnStatement {
     fn parse(parser: &mut Parser) -> Option<Self> {
         let token = parser.lexer.next()?;
         let expr = Expression::parse(parser, token, ExpressionPriority::Lowest);
-        parser.expect_peek(TokenType::Semicolon);
-        return Some(ReturnStatement { return_value: expr });
-    }
-
-    const fn token_literal() -> &'static str {
-        "return"
+        parser.expect_peek(TokenType::Semicolon)?;
+        Some(ReturnStatement { return_value: expr })
     }
 }
 
 impl Display for ReturnStatement {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        let mut out = String::from(Self::token_literal());
+        let mut out: String = TokenType::Return.to_string();
 
         if let Some(v) = &self.return_value {
             out.push(' ');
@@ -222,7 +214,7 @@ impl Expression {
                 left_expr
             }
             None => {
-                parser.no_prefix_parse_fn_error(&ctoken.name);
+                parser.no_prefix_parse_fn_error(ctoken.name);
                 None
             }
         }
@@ -275,7 +267,7 @@ pub struct Identifier {
 impl Identifier {
     pub fn new(token: TokenType, v: &str) -> Self {
         Identifier {
-            token: token,
+            token,
             value: v.to_string(),
         }
     }
@@ -318,26 +310,23 @@ impl IntegerLiteral {
 
 #[derive(Debug, PartialEq)]
 pub struct PrefixExpression {
-    token: TokenType,
-    operator: String,
+    operator: TokenType,
     right: Box<Expression>,
 }
 
 impl PrefixExpression {
-    pub fn new(token: TokenType, operator: &str, right: Expression) -> Self {
+    pub fn new(operator: TokenType, right: Expression) -> Self {
         Self {
-            token,
-            operator: operator.to_string(),
+            operator,
             right: Box::new(right),
         }
     }
 
     pub fn parse(parser: &mut Parser, ctoken: Token) -> Option<Expression> {
         let next_token = parser.lexer.next()?;
-        let right_expr = Expression::parse(parser, next_token.clone(), ExpressionPriority::Prefix)?;
+        let right_expr = Expression::parse(parser, next_token, ExpressionPriority::Prefix)?;
         Some(Expression::PrefixExpression(PrefixExpression {
-            token: ctoken.name,
-            operator: ctoken.to_string().into(),
+            operator: ctoken.name,
             right: Box::new(right_expr),
         }))
     }
@@ -355,30 +344,25 @@ impl Display for PrefixExpression {
 
 #[derive(Debug, PartialEq)]
 pub struct InfixExpression {
-    token: TokenType,
     left: Box<Expression>,
-    operator: String,
+    operator: TokenType,
     right: Box<Expression>,
 }
 
 impl InfixExpression {
-    pub fn new(token: TokenType, left: Expression, operator: &str, right: Expression) -> Self {
+    pub fn new(left: Expression, operator: TokenType, right: Expression) -> Self {
         Self {
-            token,
             left: Box::new(left),
-            operator: operator.to_string(),
+            operator,
             right: Box::new(right),
         }
     }
     pub fn parse(parser: &mut Parser, token: Token, left_expr: Expression) -> Option<Expression> {
-        let cprecedence = parser.current_precedence(&token.name);
+        let cprecedence = parser.current_precedence(token.name);
         let next_token = parser.lexer.next()?;
         let right_expr = Expression::parse(parser, next_token, cprecedence)?;
         Some(Expression::InfixExpression(InfixExpression::new(
-            token.name,
-            left_expr,
-            &token.to_string(),
-            right_expr,
+            left_expr, token.name, right_expr,
         )))
     }
 }
@@ -403,7 +387,7 @@ pub struct BooleanExpression {
 impl BooleanExpression {
     pub fn new(token: TokenType) -> Self {
         BooleanExpression {
-            token: token,
+            token,
             value: token == TokenType::True,
         }
     }
@@ -440,54 +424,33 @@ impl IfExpression {
         }
     }
     pub fn parse(parser: &mut Parser, _ctoken: Token) -> Option<Expression> {
-        if parser.expect_peek(TokenType::LParen).is_none() {
-            return None;
-        }
+        parser.expect_peek(TokenType::LParen)?;
         let next_token = parser.lexer.next()?;
         let condition = Expression::parse(parser, next_token.clone(), ExpressionPriority::Lowest)?;
 
-        if parser.expect_peek(TokenType::RParen).is_none() {
-            return None;
-        }
-        if parser.expect_peek(TokenType::LBrace).is_none() {
-            return None;
-        }
-
+        parser.expect_peek(TokenType::RParen)?;
+        parser.expect_peek(TokenType::LBrace)?;
         let consequence = BlockStatement::parse(parser, next_token)?;
+        let mut expr = IfExpression::new(condition, consequence, None);
 
         if parser.peek_token_is(TokenType::Else) {
             let token = parser.lexer.next()?;
-
-            if parser.expect_peek(TokenType::LBrace).is_none() {
-                return None;
-            }
-
-            let alternative = BlockStatement::parse(parser, token);
-
-            Some(Expression::IfExpression(IfExpression::new(
-                condition,
-                consequence,
-                alternative,
-            )))
-        } else {
-            Some(Expression::IfExpression(IfExpression::new(
-                condition,
-                consequence,
-                None,
-            )))
+            parser.expect_peek(TokenType::LBrace)?;
+            expr.alternative = BlockStatement::parse(parser, token);
         }
+        Some(Expression::IfExpression(expr))
     }
 }
 
 impl Display for IfExpression {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let mut out = format!(
-            "if {} {{ {} }} ",
+            "if {} {{ {} }}",
             self.condition.to_string(),
             self.consequence.to_string()
         );
         if let Some(alternative) = &self.alternative {
-            out += &format!("else {{ {} }}", alternative.to_string());
+            out += &format!(" else {{ {} }}", alternative.to_string());
         }
         f.write_str(&out)
     }
@@ -505,21 +468,19 @@ impl BlockStatement {
 
     pub fn parse(parser: &mut Parser, _ogtoken: Token) -> Option<Self> {
         let mut stmts = vec![];
-
         let mut ctoken = parser.lexer.next();
 
         while let Some(token) = ctoken {
             if token.name == TokenType::RBrace {
                 break;
             }
-
             let stmt = Statement::parse(parser, token);
-            if stmt.is_some() {
-                stmts.push(stmt.unwrap());
+
+            if let Some(stmt) = stmt {
+                stmts.push(stmt);
             }
             ctoken = parser.lexer.next();
         }
-
         Some(BlockStatement::new(stmts))
     }
 }
@@ -551,15 +512,11 @@ impl FunctionLiteral {
         }
     }
     pub fn parse(parser: &mut Parser, ctoken: Token) -> Option<Expression> {
-        if parser.expect_peek(TokenType::LParen).is_none() {
-            return None;
-        }
+        parser.expect_peek(TokenType::LParen)?;
         let ntoken = parser.lexer.peek()?.clone();
         let parameters = FunctionLiteral::parse_function_parameters(parser, ntoken)?;
 
-        if parser.expect_peek(TokenType::LBrace).is_none() {
-            return None;
-        }
+        parser.expect_peek(TokenType::LBrace)?;
 
         let ntoken = parser.lexer.peek()?.clone();
 
@@ -589,11 +546,7 @@ impl FunctionLiteral {
                 let ident = Identifier::new(token.name, &token.literal?);
                 out.push(ident);
             }
-
-            if parser.expect_peek(TokenType::RParen).is_none() {
-                return None;
-            }
-
+            parser.expect_peek(TokenType::RParen)?;
             Some(out)
         }
     }
@@ -662,10 +615,8 @@ impl CallExpression {
                 return Some(expressions);
             }
         }
+        parser.expect_peek(TokenType::RParen)?;
 
-        if parser.expect_peek(TokenType::RParen).is_none() {
-            return None;
-        }
         Some(expressions)
     }
 }
