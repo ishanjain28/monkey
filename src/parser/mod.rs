@@ -794,6 +794,119 @@ mod tests {
                 ))],
             ),
             (
+                "a + add(1, 2 * 3, 4 + 5) + d;",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::with_value(TokenType::Ident, "a"),
+                    Expression::InfixExpression(InfixExpression::new(
+                        TokenType::Plus,
+                        Expression::InfixExpression(InfixExpression::new(
+                            TokenType::Plus,
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "a")),
+                            "+",
+                            Expression::CallExpression(CallExpression::new(
+                                Expression::Identifier(Identifier::new(TokenType::Ident, "add")),
+                                vec![
+                                    Expression::IntegerLiteral(IntegerLiteral::new(1)),
+                                    Expression::InfixExpression(InfixExpression::new(
+                                        TokenType::Asterisk,
+                                        Expression::IntegerLiteral(IntegerLiteral::new(2)),
+                                        "*",
+                                        Expression::IntegerLiteral(IntegerLiteral::new(3)),
+                                    )),
+                                    Expression::InfixExpression(InfixExpression::new(
+                                        TokenType::Plus,
+                                        Expression::IntegerLiteral(IntegerLiteral::new(4)),
+                                        "+",
+                                        Expression::IntegerLiteral(IntegerLiteral::new(5)),
+                                    )),
+                                ],
+                            )),
+                        )),
+                        "+",
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "d")),
+                    )),
+                ))],
+            ),
+            (
+                "add(a,b,1, 2 * 3, 4 + 5, add(6,7 *8));",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::with_value(TokenType::Ident, "add"),
+                    Expression::CallExpression(CallExpression::new(
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "add")),
+                        vec![
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "a")),
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "b")),
+                            Expression::IntegerLiteral(IntegerLiteral::new(1)),
+                            Expression::InfixExpression(InfixExpression::new(
+                                TokenType::Asterisk,
+                                Expression::IntegerLiteral(IntegerLiteral::new(2)),
+                                "*",
+                                Expression::IntegerLiteral(IntegerLiteral::new(3)),
+                            )),
+                            Expression::InfixExpression(InfixExpression::new(
+                                TokenType::Plus,
+                                Expression::IntegerLiteral(IntegerLiteral::new(4)),
+                                "+",
+                                Expression::IntegerLiteral(IntegerLiteral::new(5)),
+                            )),
+                            Expression::CallExpression(CallExpression::new(
+                                Expression::Identifier(Identifier::new(TokenType::Ident, "add")),
+                                vec![
+                                    Expression::IntegerLiteral(IntegerLiteral::new(6)),
+                                    Expression::InfixExpression(InfixExpression::new(
+                                        TokenType::Asterisk,
+                                        Expression::IntegerLiteral(IntegerLiteral::new(7)),
+                                        "*",
+                                        Expression::IntegerLiteral(IntegerLiteral::new(8)),
+                                    )),
+                                ],
+                            )),
+                        ],
+                    )),
+                ))],
+            ),
+            (
+                "add(a + b + c * d / f + g);",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    Token::with_value(TokenType::Ident, "add"),
+                    Expression::CallExpression(CallExpression::new(
+                        Expression::Identifier(Identifier::new(TokenType::Ident, "add")),
+                        vec![Expression::InfixExpression(InfixExpression::new(
+                            TokenType::Plus,
+                            Expression::InfixExpression(InfixExpression::new(
+                                TokenType::Plus,
+                                Expression::InfixExpression(InfixExpression::new(
+                                    TokenType::Plus,
+                                    Expression::Identifier(Identifier::new(TokenType::Ident, "a")),
+                                    "+",
+                                    Expression::Identifier(Identifier::new(TokenType::Ident, "b")),
+                                )),
+                                "+",
+                                Expression::InfixExpression(InfixExpression::new(
+                                    TokenType::Slash,
+                                    Expression::InfixExpression(InfixExpression::new(
+                                        TokenType::Asterisk,
+                                        Expression::Identifier(Identifier::new(
+                                            TokenType::Ident,
+                                            "c",
+                                        )),
+                                        "*",
+                                        Expression::Identifier(Identifier::new(
+                                            TokenType::Ident,
+                                            "d",
+                                        )),
+                                    )),
+                                    "/",
+                                    Expression::Identifier(Identifier::new(TokenType::Ident, "f")),
+                                )),
+                            )),
+                            "+",
+                            Expression::Identifier(Identifier::new(TokenType::Ident, "g")),
+                        ))],
+                    )),
+                ))],
+            ),
+            (
                 "add();",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
                     Token::with_value(TokenType::Ident, "add"),
@@ -813,6 +926,37 @@ mod tests {
             assert_eq!(parser.errors.len(), 0);
             assert!(program.is_some());
             assert_eq!(program.unwrap().statements, test.1);
+        }
+    }
+    #[test]
+    fn call_expression_parsing_string() {
+        // TODO: Figure out why are there inconsistencies in BlockStatements Token
+        let test_cases = [
+            ("add(1, 2 * 3, 4 + 5);", "add(1, (2 * 3), (4 + 5))"),
+            (
+                "a + add(1, 2 * 3, 4 + 5) + d;",
+                "((a + add(1, (2 * 3), (4 + 5))) + d)",
+            ),
+            (
+                "add(a,b,1, 2 * 3, 4 + 5, add(6,7 *8));",
+                "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
+            ),
+            (
+                "add(a + b + c * d / f + g);",
+                "add((((a + b) + ((c * d) / f)) + g))",
+            ),
+            ("add();", "add()"),
+            ("a + add(b * c) + d", "((a + add((b * c))) + d)"),
+        ];
+
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap().to_string(), test.1);
         }
     }
 }

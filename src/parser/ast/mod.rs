@@ -645,16 +645,22 @@ impl CallExpression {
             None => return Some(expressions),
         };
 
-        Expression::parse(parser, ntoken, ExpressionPriority::Lowest).map(|e| expressions.push(e));
-
+        if let Some(expr) = Expression::parse(parser, ntoken, ExpressionPriority::Lowest) {
+            expressions.push(expr);
+        } else {
+            return Some(expressions);
+        }
         while parser.peek_token_is(TokenType::Comma) {
             parser.lexer.next();
             let token = match parser.lexer.next() {
                 Some(v) => v,
                 None => return Some(expressions),
             };
-            Expression::parse(parser, token, ExpressionPriority::Lowest)
-                .map(|e| expressions.push(e));
+            if let Some(expr) = Expression::parse(parser, token, ExpressionPriority::Lowest) {
+                expressions.push(expr);
+            } else {
+                return Some(expressions);
+            }
         }
 
         if parser.expect_peek(TokenType::RParen).is_none() {
