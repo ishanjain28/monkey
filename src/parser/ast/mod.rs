@@ -192,6 +192,7 @@ pub enum Expression {
     BooleanExpression(BooleanExpression),
     IfExpression(IfExpression),
     FunctionExpression(FunctionLiteral),
+    CallExpression(CallExpression),
     // TODO: Temporary placeholder value. Should be removed once this section is done
     None,
 }
@@ -225,10 +226,6 @@ impl Expression {
         }
     }
 
-    pub fn parse_boolean(_parser: &mut Parser, token: Token) -> Option<Self> {
-        Some(Self::BooleanExpression(BooleanExpression::new(token.name)))
-    }
-
     pub fn parse_grouped_expression(parser: &mut Parser, _token: Token) -> Option<Self> {
         let next_token = parser.lexer.next()?;
         let expr = Expression::parse(parser, next_token, ExpressionPriority::Lowest);
@@ -237,47 +234,6 @@ impl Expression {
             None
         } else {
             expr
-        }
-    }
-
-    pub fn parse_if_expression(parser: &mut Parser, ctoken: Token) -> Option<Self> {
-        if parser.expect_peek(TokenType::LParen).is_none() {
-            return None;
-        }
-        let next_token = parser.lexer.next()?;
-        let condition = Expression::parse(parser, next_token.clone(), ExpressionPriority::Lowest)?;
-
-        if parser.expect_peek(TokenType::RParen).is_none() {
-            return None;
-        }
-        if parser.expect_peek(TokenType::LBrace).is_none() {
-            return None;
-        }
-
-        let consequence = BlockStatement::parse(parser, next_token)?;
-
-        if parser.peek_token_is(TokenType::Else) {
-            let token = parser.lexer.next()?;
-
-            if parser.expect_peek(TokenType::LBrace).is_none() {
-                return None;
-            }
-
-            let alternative = BlockStatement::parse(parser, token);
-
-            Some(Expression::IfExpression(IfExpression::new(
-                ctoken.name,
-                condition,
-                consequence,
-                alternative,
-            )))
-        } else {
-            Some(Expression::IfExpression(IfExpression::new(
-                ctoken.name,
-                condition,
-                consequence,
-                None,
-            )))
         }
     }
 }
@@ -292,6 +248,7 @@ impl Display for Expression {
             Expression::BooleanExpression(v) => v.to_string(),
             Expression::IfExpression(v) => v.to_string(),
             Expression::FunctionExpression(v) => v.to_string(),
+            Expression::CallExpression(v) => v.to_string(),
             Expression::None => "None".into(),
         };
 
@@ -337,16 +294,12 @@ impl Display for Identifier {
 
 #[derive(Debug, PartialEq)]
 pub struct IntegerLiteral {
-    token: TokenType,
     value: i64,
 }
 
 impl IntegerLiteral {
-    pub fn new(token: TokenType, v: i64) -> Self {
-        Self {
-            token: token,
-            value: v,
-        }
+    pub fn new(v: i64) -> Self {
+        Self { value: v }
     }
     pub fn parse(parser: &mut Parser, token: Token) -> Option<Expression> {
         let n = match token.literal?.parse::<i64>() {
@@ -358,24 +311,21 @@ impl IntegerLiteral {
                 return None;
             }
         };
-        Some(Expression::IntegerLiteral(IntegerLiteral::new(
-            TokenType::Int,
-            n,
-        )))
+        Some(Expression::IntegerLiteral(IntegerLiteral::new(n)))
     }
 }
 
 #[derive(Debug, PartialEq)]
 pub struct PrefixExpression {
-    token: Token,
+    token: TokenType,
     operator: String,
     right: Box<Expression>,
 }
 
 impl PrefixExpression {
-    pub fn new(token: Token, operator: &str, right: Expression) -> Self {
+    pub fn new(token: TokenType, operator: &str, right: Expression) -> Self {
         Self {
-            token: token,
+            token,
             operator: operator.to_string(),
             right: Box::new(right),
         }
@@ -385,7 +335,7 @@ impl PrefixExpression {
         let next_token = parser.lexer.next()?;
         let right_expr = Expression::parse(parser, next_token.clone(), ExpressionPriority::Prefix)?;
         Some(Expression::PrefixExpression(PrefixExpression {
-            token: ctoken.clone(),
+            token: ctoken.name,
             operator: ctoken.to_string().into(),
             right: Box::new(right_expr),
         }))
@@ -404,16 +354,16 @@ impl Display for PrefixExpression {
 
 #[derive(Debug, PartialEq)]
 pub struct InfixExpression {
-    token: Token,
+    token: TokenType,
     left: Box<Expression>,
     operator: String,
     right: Box<Expression>,
 }
 
 impl InfixExpression {
-    pub fn new(token: Token, left: Expression, operator: &str, right: Expression) -> Self {
+    pub fn new(token: TokenType, left: Expression, operator: &str, right: Expression) -> Self {
         Self {
-            token: token,
+            token,
             left: Box::new(left),
             operator: operator.to_string(),
             right: Box::new(right),
@@ -424,7 +374,7 @@ impl InfixExpression {
         let next_token = parser.lexer.next()?;
         let right_expr = Expression::parse(parser, next_token, cprecedence)?;
         Some(Expression::InfixExpression(InfixExpression::new(
-            token.clone(),
+            token.name,
             left_expr,
             &token.to_string(),
             right_expr,
@@ -456,6 +406,11 @@ impl BooleanExpression {
             value: token == TokenType::True,
         }
     }
+    pub fn parse(_parser: &mut Parser, token: Token) -> Option<Expression> {
+        Some(Expression::BooleanExpression(BooleanExpression::new(
+            token.name,
+        )))
+    }
 }
 
 impl Display for BooleanExpression {
@@ -466,7 +421,6 @@ impl Display for BooleanExpression {
 
 #[derive(Debug, PartialEq)]
 pub struct IfExpression {
-    token: TokenType,
     condition: Box<Expression>,
     consequence: BlockStatement,
     alternative: Option<BlockStatement>,
@@ -474,16 +428,52 @@ pub struct IfExpression {
 
 impl IfExpression {
     pub fn new(
-        token: TokenType,
         condition: Expression,
         consequence: BlockStatement,
         alternative: Option<BlockStatement>,
     ) -> Self {
         Self {
-            token,
             condition: Box::new(condition),
             consequence,
             alternative,
+        }
+    }
+    pub fn parse(parser: &mut Parser, _ctoken: Token) -> Option<Expression> {
+        if parser.expect_peek(TokenType::LParen).is_none() {
+            return None;
+        }
+        let next_token = parser.lexer.next()?;
+        let condition = Expression::parse(parser, next_token.clone(), ExpressionPriority::Lowest)?;
+
+        if parser.expect_peek(TokenType::RParen).is_none() {
+            return None;
+        }
+        if parser.expect_peek(TokenType::LBrace).is_none() {
+            return None;
+        }
+
+        let consequence = BlockStatement::parse(parser, next_token)?;
+
+        if parser.peek_token_is(TokenType::Else) {
+            let token = parser.lexer.next()?;
+
+            if parser.expect_peek(TokenType::LBrace).is_none() {
+                return None;
+            }
+
+            let alternative = BlockStatement::parse(parser, token);
+
+            Some(Expression::IfExpression(IfExpression::new(
+                condition,
+                consequence,
+                alternative,
+            )))
+        } else {
+            Some(Expression::IfExpression(IfExpression::new(
+                condition,
+                consequence,
+                None,
+            )))
         }
     }
 }
@@ -504,19 +494,15 @@ impl Display for IfExpression {
 
 #[derive(Debug, PartialEq)]
 pub struct BlockStatement {
-    token: Token,
     statements: Vec<Statement>,
 }
 
 impl BlockStatement {
-    pub fn new(token: Token, stmt: Vec<Statement>) -> Self {
-        Self {
-            token,
-            statements: stmt,
-        }
+    pub fn new(stmt: Vec<Statement>) -> Self {
+        Self { statements: stmt }
     }
 
-    pub fn parse(parser: &mut Parser, ogtoken: Token) -> Option<Self> {
+    pub fn parse(parser: &mut Parser, _ogtoken: Token) -> Option<Self> {
         let mut stmts = vec![];
 
         let mut ctoken = parser.lexer.next();
@@ -533,7 +519,7 @@ impl BlockStatement {
             ctoken = parser.lexer.next();
         }
 
-        Some(BlockStatement::new(ogtoken, stmts))
+        Some(BlockStatement::new(stmts))
     }
 }
 
@@ -585,7 +571,7 @@ impl FunctionLiteral {
         }))
     }
 
-    fn parse_function_parameters(parser: &mut Parser, ctoken: Token) -> Option<Vec<Identifier>> {
+    fn parse_function_parameters(parser: &mut Parser, _ctoken: Token) -> Option<Vec<Identifier>> {
         let mut out = vec![];
 
         if parser.peek_token_is(TokenType::RParen) {
@@ -617,8 +603,73 @@ impl Display for FunctionLiteral {
             "{} {}({}) {}",
             self.token.name.to_string(),
             self.token.literal.as_ref().unwrap(),
-            self.parameters.iter().map(|x| x.to_string()).join(","),
+            self.parameters.iter().join(","),
             ""
+        ))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CallExpression {
+    function: Box<Expression>,
+    arguments: Vec<Expression>,
+}
+
+impl CallExpression {
+    pub fn new(f: Expression, arguments: Vec<Expression>) -> Self {
+        Self {
+            function: Box::new(f),
+            arguments,
+        }
+    }
+
+    pub fn parse(parser: &mut Parser, ctoken: Token, expr: Expression) -> Option<Expression> {
+        let args = Self::parse_call_arguments(parser, ctoken);
+
+        Some(Expression::CallExpression(Self {
+            function: Box::new(expr),
+            arguments: args?,
+        }))
+    }
+
+    fn parse_call_arguments(parser: &mut Parser, _ctoken: Token) -> Option<Vec<Expression>> {
+        let mut expressions = vec![];
+        if let Some(token) = parser.lexer.peek() {
+            if token.name == TokenType::RParen {
+                parser.lexer.next();
+                return Some(expressions);
+            }
+        }
+        let ntoken = match parser.lexer.next() {
+            Some(token) => token,
+            None => return Some(expressions),
+        };
+
+        Expression::parse(parser, ntoken, ExpressionPriority::Lowest).map(|e| expressions.push(e));
+
+        while parser.peek_token_is(TokenType::Comma) {
+            parser.lexer.next();
+            let token = match parser.lexer.next() {
+                Some(v) => v,
+                None => return Some(expressions),
+            };
+            Expression::parse(parser, token, ExpressionPriority::Lowest)
+                .map(|e| expressions.push(e));
+        }
+
+        if parser.expect_peek(TokenType::RParen).is_none() {
+            return None;
+        }
+        Some(expressions)
+    }
+}
+
+impl Display for CallExpression {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
+        f.write_fmt(format_args!(
+            "{}({})",
+            self.function,
+            self.arguments.iter().join(", ")
         ))
     }
 }
