@@ -29,7 +29,7 @@ impl Object {
 #[cfg(test)]
 mod tests {
     use crate::{
-        evaluator::{tree_walker::TreeWalker, Evaluator, Object},
+        evaluator::{tree_walker::TreeWalker, Evaluator, Object, FALSE, NULL, TRUE},
         lexer::Lexer,
         parser::{ast::Node, Parser},
     };
@@ -56,16 +56,16 @@ mod tests {
     #[test]
     fn eval_boolean_expression() {
         let test_cases = [
-            ("true", Some(Object::Boolean(true))),
-            ("false", Some(Object::Boolean(false))),
-            ("3 < 4", Some(Object::Boolean(true))),
-            ("3 > 4", Some(Object::Boolean(false))),
-            ("3 == 4", Some(Object::Boolean(false))),
-            ("3 != 4", Some(Object::Boolean(true))),
-            ("(1 < 2 ) == true", Some(Object::Boolean(true))),
-            ("(1 < 2 ) == false", Some(Object::Boolean(false))),
-            ("(1 > 2 ) == true", Some(Object::Boolean(false))),
-            ("(1 > 2 ) == false", Some(Object::Boolean(true))),
+            ("true", Some(TRUE)),
+            ("false", Some(FALSE)),
+            ("3 < 4", Some(TRUE)),
+            ("3 > 4", Some(FALSE)),
+            ("3 == 4", Some(FALSE)),
+            ("3 != 4", Some(TRUE)),
+            ("(1 < 2 ) == true", Some(TRUE)),
+            ("(1 < 2 ) == false", Some(FALSE)),
+            ("(1 > 2 ) == true", Some(FALSE)),
+            ("(1 > 2 ) == false", Some(TRUE)),
         ];
 
         for test in test_cases.iter() {
@@ -83,12 +83,12 @@ mod tests {
     #[test]
     fn eval_bang_operator() {
         let test_cases = [
-            ("!5", Some(Object::Boolean(false))),
-            ("!!true", Some(Object::Boolean(true))),
-            ("!!false", Some(Object::Boolean(false))),
-            ("!!5", Some(Object::Boolean(true))),
-            ("!true", Some(Object::Boolean(false))),
-            ("!false", Some(Object::Boolean(true))),
+            ("!5", Some(FALSE)),
+            ("!!true", Some(TRUE)),
+            ("!!false", Some(FALSE)),
+            ("!!5", Some(TRUE)),
+            ("!true", Some(FALSE)),
+            ("!false", Some(TRUE)),
         ];
         for test in test_cases.iter() {
             let lexer = Lexer::new(test.0);
@@ -119,6 +119,39 @@ mod tests {
             ("2 * (5 + 10)", Some(Object::Integer(30))),
             ("3 * (3 * 3) + 10", Some(Object::Integer(37))),
             ("(5 + 10 * 2 + 15 / 3) * 2 + -10", Some(Object::Integer(50))),
+        ];
+
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            assert!(program.is_some());
+            let program = program.unwrap();
+            let evaluator = TreeWalker::new();
+            let eval = evaluator.eval(Node::Program(program));
+            assert_eq!(eval, test.1);
+        }
+    }
+
+    #[test]
+    fn eval_if_else_expression() {
+        let test_cases = [
+            // (
+            //     "if (x > 10) {
+            //         puts(\"everything okay\");
+            //     } else {
+            //         puts(\"x is too low!\");
+            //         potato();
+            //     }",
+            //     Object::Null,
+            // ),
+            ("if(true) {10}", Some(Object::Integer(10))),
+            ("if(false) {10}", Some(NULL)),
+            ("if (1) {10}", Some(Object::Integer(10))),
+            ("if(1 < 2) {10}", Some(Object::Integer(10))),
+            ("if (1 > 2) {10}", Some(NULL)),
+            ("if(1 > 2) {10} else {20}", Some(Object::Integer(20))),
+            ("if (1 < 2) {10} else {20}", Some(Object::Integer(10))),
         ];
 
         for test in test_cases.iter() {

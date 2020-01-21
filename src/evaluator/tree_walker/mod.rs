@@ -20,6 +20,7 @@ impl Evaluator for TreeWalker {
                 Statement::ExpressionStatement(ExpressionStatement { expression, .. }) => {
                     self.eval(Node::Expression(expression))
                 }
+                Statement::BlockStatement(bs) => self.eval_statements(bs.statements),
                 _ => None,
             },
             Node::Expression(expr) => match expr {
@@ -32,8 +33,18 @@ impl Evaluator for TreeWalker {
                 Expression::InfixExpression(ie) => {
                     let left = self.eval(Node::Expression(*ie.left))?;
                     let right = self.eval(Node::Expression(*ie.right))?;
-
                     self.eval_infix_expression(left, ie.operator, right)
+                }
+                Expression::IfExpression(ie) => {
+                    let condition = self.eval(Node::Expression(*ie.condition))?;
+
+                    if self.is_truthy(&condition) {
+                        self.eval(Node::Statement(Statement::BlockStatement(ie.consequence)))
+                    } else if let Some(alternative) = ie.alternative {
+                        self.eval(Node::Statement(Statement::BlockStatement(alternative)))
+                    } else {
+                        Some(NULL)
+                    }
                 }
                 _ => None,
             },
@@ -97,6 +108,15 @@ impl TreeWalker {
         match expr {
             Object::Integer(v) => Object::Integer(-v),
             _ => NULL,
+        }
+    }
+
+    fn is_truthy(&self, obj: &Object) -> bool {
+        match *obj {
+            NULL => false,
+            TRUE => true,
+            FALSE => false,
+            _ => true,
         }
     }
 }

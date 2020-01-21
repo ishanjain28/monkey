@@ -413,9 +413,9 @@ impl Display for BooleanExpression {
 
 #[derive(Debug, PartialEq)]
 pub struct IfExpression {
-    condition: Box<Expression>,
-    consequence: BlockStatement,
-    alternative: Option<BlockStatement>,
+    pub condition: Box<Expression>,
+    pub consequence: BlockStatement,
+    pub alternative: Option<BlockStatement>,
 }
 
 impl IfExpression {
@@ -465,7 +465,7 @@ impl Display for IfExpression {
 
 #[derive(Debug, PartialEq)]
 pub struct BlockStatement {
-    statements: Vec<Statement>,
+    pub statements: Vec<Statement>,
 }
 
 impl BlockStatement {

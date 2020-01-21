@@ -171,9 +171,7 @@ mod tests {
     };
 
     fn check_parser_errors(p: &Parser) {
-        if p.errors.is_empty() {
-            return;
-        } else {
+        if !p.errors.is_empty() {
             let mut out = String::new();
             out.push_str(&format!("parser has {} errors\n", p.errors.len()));
             for error in &p.errors {
