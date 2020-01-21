@@ -1,6 +1,7 @@
 use crate::{
+    evaluator::{tree_walker::TreeWalker, Evaluator},
     lexer::Lexer,
-    parser::{Error as ParserError, Parser},
+    parser::{ast::Node, Error as ParserError, Parser},
 };
 use std::io::{self, BufRead, Result as IoResult, Write};
 
@@ -29,11 +30,13 @@ fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
             print_parser_errors(&mut out, &parser.errors).unwrap();
             continue;
         }
-        if let Some(program) = program {
-            for stmt in &program.statements {
-                out.write_fmt(format_args!("{}\n", stmt)).unwrap();
-            }
-        };
+        let program = program.unwrap();
+        let evaluator = TreeWalker::new();
+        let obj = evaluator.eval(Node::Program(program));
+        if let Some(node) = obj {
+            out.write_fmt(format_args!("{}\n", node.inspect())).unwrap();
+            out.flush().unwrap();
+        }
     }
 }
 

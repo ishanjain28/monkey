@@ -16,6 +16,13 @@ pub struct Program {
     pub statements: Vec<Statement>,
 }
 
+#[derive(Debug)]
+pub enum Node {
+    Program(Program),
+    Statement(Statement),
+    Expression(Expression),
+}
+
 impl Display for Program {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let mut out = String::new();
@@ -143,7 +150,7 @@ impl Display for ReturnStatement {
 #[derive(Debug, PartialEq)]
 pub struct ExpressionStatement {
     token: Token,
-    expression: Expression,
+    pub expression: Expression,
 }
 
 impl ExpressionStatement {
@@ -287,7 +294,7 @@ impl Display for Identifier {
 
 #[derive(Debug, PartialEq)]
 pub struct IntegerLiteral {
-    value: i64,
+    pub value: i64,
 }
 
 impl IntegerLiteral {
@@ -310,8 +317,8 @@ impl IntegerLiteral {
 
 #[derive(Debug, PartialEq)]
 pub struct PrefixExpression {
-    operator: TokenType,
-    right: Box<Expression>,
+    pub operator: TokenType,
+    pub right: Box<Expression>,
 }
 
 impl PrefixExpression {
@@ -344,9 +351,9 @@ impl Display for PrefixExpression {
 
 #[derive(Debug, PartialEq)]
 pub struct InfixExpression {
-    left: Box<Expression>,
-    operator: TokenType,
-    right: Box<Expression>,
+    pub left: Box<Expression>,
+    pub operator: TokenType,
+    pub right: Box<Expression>,
 }
 
 impl InfixExpression {
@@ -381,7 +388,7 @@ impl Display for InfixExpression {
 #[derive(Debug, PartialEq)]
 pub struct BooleanExpression {
     token: TokenType,
-    value: bool,
+    pub value: bool,
 }
 
 impl BooleanExpression {
