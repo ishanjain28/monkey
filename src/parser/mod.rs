@@ -181,6 +181,18 @@ mod tests {
         }
     }
 
+    fn check_test_cases(test_cases: &[(&str, Vec<Statement>)]) {
+        for test in test_cases.iter() {
+            let lexer = Lexer::new(test.0);
+            let mut parser = Parser::new(lexer);
+            let program = parser.parse_program();
+            check_parser_errors(&parser);
+            assert_eq!(parser.errors.len(), 0);
+            assert!(program.is_some());
+            assert_eq!(program.unwrap().statements, test.1);
+        }
+    }
+
     #[test]
     fn let_statements() {
         let test_cases = [(
@@ -201,15 +213,7 @@ mod tests {
             ],
         )];
 
-        for test in test_cases.iter() {
-            let lexer = Lexer::new(test.0);
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse_program();
-            check_parser_errors(&parser);
-            assert_eq!(parser.errors.len(), 0);
-            assert!(program.is_some());
-            assert_eq!(program.unwrap().statements, test.1);
-        }
+        check_test_cases(&test_cases);
 
         let fail_case = "let x 5; let 10; let 83838383;";
 
@@ -241,30 +245,12 @@ mod tests {
             ],
         )];
 
-        for test in test_cases.iter() {
-            let lexer = Lexer::new(test.0);
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse_program();
-            check_parser_errors(&parser);
-            assert_eq!(parser.errors.len(), 0);
-            assert!(program.is_some());
-            assert_eq!(program.unwrap().statements, test.1);
-        }
-
-        let lexer = Lexer::new("return 5; return 10; return add(10);");
-        let mut parser = Parser::new(lexer);
-        let program = parser.parse_program();
-
-        check_parser_errors(&parser);
-        assert_eq!(parser.errors.len(), 0);
-        assert!(program.is_some());
-        let program = program.unwrap();
-        assert_eq!(program.statements.len(), 3);
-        assert_eq!(parser.errors.len(), 0);
+        check_test_cases(&test_cases);
     }
 
     #[test]
     fn identifier_expression() {
+        // TODO: Add more tests for this
         let lexer = Lexer::new("foobar;");
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
@@ -303,7 +289,7 @@ mod tests {
 
     #[test]
     fn prefix_expressions() {
-        let prefix_tests = [
+        let test_cases = [
             (
                 "!5",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
@@ -372,20 +358,12 @@ mod tests {
             ),
         ];
 
-        for test in prefix_tests.iter() {
-            let lexer = Lexer::new(test.0);
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse_program();
-            check_parser_errors(&parser);
-            assert_eq!(parser.errors.len(), 0);
-            assert!(program.is_some());
-            assert_eq!(program.unwrap().statements, test.1);
-        }
+        check_test_cases(&test_cases);
     }
 
     #[test]
     fn parsing_infix_expressions() {
-        let infix_tests = [
+        let test_cases = [
             (
                 "5 + 10;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
@@ -490,15 +468,7 @@ mod tests {
                 ))],
             ),
         ];
-        for test in infix_tests.iter() {
-            let lexer = Lexer::new(test.0);
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse_program();
-            check_parser_errors(&parser);
-            assert_eq!(parser.errors.len(), 0);
-            assert!(program.is_some());
-            assert_eq!(program.unwrap().statements, test.1);
-        }
+        check_test_cases(&test_cases);
     }
 
     #[test]
@@ -570,16 +540,7 @@ mod tests {
                 ))],
             ),
         ];
-
-        for test in test_cases.iter() {
-            let lexer = Lexer::new(test.0);
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse_program();
-            check_parser_errors(&parser);
-            assert_eq!(parser.errors.len(), 0);
-            assert!(program.is_some());
-            assert_eq!(program.unwrap().statements, test.1);
-        }
+        check_test_cases(&test_cases);
     }
     #[test]
     fn if_expression() {
@@ -604,15 +565,7 @@ mod tests {
             ))],
         )];
 
-        for test in test_cases.iter() {
-            let lexer = Lexer::new(test.0);
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse_program();
-            check_parser_errors(&parser);
-            assert_eq!(parser.errors.len(), 0);
-            assert!(program.is_some());
-            assert_eq!(program.unwrap().statements, test.1);
-        }
+        check_test_cases(&test_cases);
     }
     #[test]
     fn if_else_expression() {
@@ -641,16 +594,7 @@ mod tests {
                 )),
             ))],
         )];
-
-        for test in test_cases.iter() {
-            let lexer = Lexer::new(test.0);
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse_program();
-            check_parser_errors(&parser);
-            assert_eq!(parser.errors.len(), 0);
-            assert!(program.is_some());
-            assert_eq!(program.unwrap().statements, test.1);
-        }
+        check_test_cases(&test_cases);
     }
 
     #[test]
@@ -762,15 +706,7 @@ mod tests {
             ),
         ];
 
-        for test in test_cases.iter() {
-            let lexer = Lexer::new(test.0);
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse_program();
-            check_parser_errors(&parser);
-            assert_eq!(parser.errors.len(), 0);
-            assert!(program.is_some());
-            assert_eq!(program.unwrap().statements, test.1);
-        }
+        check_test_cases(&test_cases);
     }
     #[test]
     fn call_expression_parsing() {
@@ -910,15 +846,7 @@ mod tests {
             ),
         ];
 
-        for test in test_cases.iter() {
-            let lexer = Lexer::new(test.0);
-            let mut parser = Parser::new(lexer);
-            let program = parser.parse_program();
-            check_parser_errors(&parser);
-            assert_eq!(parser.errors.len(), 0);
-            assert!(program.is_some());
-            assert_eq!(program.unwrap().statements, test.1);
-        }
+        check_test_cases(&test_cases);
     }
     #[test]
     fn call_expression_parsing_string() {

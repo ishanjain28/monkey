@@ -115,21 +115,19 @@ impl Display for LetStatement {
 
 #[derive(Debug, PartialEq)]
 pub struct ReturnStatement {
-    return_value: Option<Expression>,
+    pub value: Option<Expression>,
 }
 
 impl ReturnStatement {
     pub fn new(expr: Expression) -> Self {
-        ReturnStatement {
-            return_value: Some(expr),
-        }
+        ReturnStatement { value: Some(expr) }
     }
 
     fn parse(parser: &mut Parser) -> Option<Self> {
         let token = parser.lexer.next()?;
         let expr = Expression::parse(parser, token, ExpressionPriority::Lowest);
         parser.expect_peek(TokenType::Semicolon)?;
-        Some(ReturnStatement { return_value: expr })
+        Some(ReturnStatement { value: expr })
     }
 }
 
@@ -137,7 +135,7 @@ impl Display for ReturnStatement {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         let mut out: String = TokenType::Return.to_string();
 
-        if let Some(v) = &self.return_value {
+        if let Some(v) = &self.value {
             out.push(' ');
             let a: String = v.into();
             out.push_str(&a);
@@ -660,12 +658,9 @@ mod tests {
                     ))),
                 }),
                 Statement::Return(ReturnStatement {
-                    return_value: Some(Expression::Identifier(Identifier::new(
-                        TokenType::Int,
-                        "5",
-                    ))),
+                    value: Some(Expression::Identifier(Identifier::new(TokenType::Int, "5"))),
                 }),
-                Statement::Return(ReturnStatement { return_value: None }),
+                Statement::Return(ReturnStatement { value: None }),
             ],
         };
         assert_eq!(

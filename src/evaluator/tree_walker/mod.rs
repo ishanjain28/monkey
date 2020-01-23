@@ -1,7 +1,10 @@
+// TODO: This is all a mess. Almost certainly because right now, I don't know any better way to do this.
+// It's just constantly unwrapping enums from one place and rewrapping it to some other enum(or even the same enum) and returning it
+// The error handling story is pretty bad too
 use crate::{
     evaluator::{Evaluator, Object, FALSE, NULL, TRUE},
     lexer::TokenType,
-    parser::ast::{Expression, ExpressionStatement, Node, Statement},
+    parser::ast::{BlockStatement, Expression, ExpressionStatement, Node, Program, Statement},
 };
 
 pub struct TreeWalker;
@@ -15,12 +18,16 @@ impl TreeWalker {
 impl Evaluator for TreeWalker {
     fn eval(&self, node: Node) -> Option<Object> {
         match node {
-            Node::Program(p) => self.eval_statements(p.statements),
+            Node::Program(p) => self.eval_program(p),
             Node::Statement(stmt) => match stmt {
                 Statement::ExpressionStatement(ExpressionStatement { expression, .. }) => {
                     self.eval(Node::Expression(expression))
                 }
-                Statement::BlockStatement(bs) => self.eval_statements(bs.statements),
+                Statement::BlockStatement(bs) => self.eval_block_statement(bs),
+                Statement::Return(ret) => {
+                    let ret_val = self.eval(Node::Expression(ret.value?))?;
+                    Some(Object::ReturnValue(Box::new(ret_val)))
+                }
                 _ => None,
             },
             Node::Expression(expr) => match expr {
@@ -53,10 +60,54 @@ impl Evaluator for TreeWalker {
 }
 
 impl TreeWalker {
-    fn eval_statements(&self, stmts: Vec<Statement>) -> Option<Object> {
+    fn eval_program(&self, prg: Program) -> Option<Object> {
         let mut out: Option<Object> = None;
-        for stmt in stmts {
-            out = self.eval(Node::Statement(stmt))
+        for stmt in prg.statements {
+            out = self.eval(Node::Statement(stmt));
+            // No need to evaluate any more statements from a statements vector once we
+            // get a return keyword. nothing after in the block matters.
+            if let Some(out) = out.clone() {
+                match out {
+                    Object::ReturnValue(v) => return Some(*v),
+                    Object::Error(_) => return Some(out),
+                    _ => {}
+                }
+            }
+        }
+        out
+    }
+
+    fn eval_block_statement(&self, bs: BlockStatement) -> Option<Object> {
+        let mut out: Option<Object> = None;
+
+        for stmt in bs.statements {
+            out = self.eval(Node::Statement(stmt));
+
+            // TODO: Find a nicer way to do this. :(
+            // The objective here is,
+            // If we encounter a node of type ReturnValue, Don't unwrap it. Return it as is
+            // So, It can evaluated again by the eval function.
+            // This is helpful when we have a nested structure with multiple return statments.
+            // something like,
+            // if (true) {
+            //      if (true) {
+            //          return 10;
+            //      }
+            //      return 1;
+            // }
+            // This will return 1 if we unwrap return right here and return the value within.
+            // But in reality that shouldn't happen. It should be returning 10
+            // So, We don't unwrap the ReturnValue node when we encounter 10. Just return it as is and it is later eval-ed
+            // and the correct value is returned
+            if let Some(out) = out.clone() {
+                match out {
+                    Object::ReturnValue(v) => {
+                        return Some(Object::ReturnValue(v));
+                    }
+                    Object::Error(_) => return Some(out),
+                    _ => {}
+                }
+            }
         }
         out
     }
@@ -65,7 +116,10 @@ impl TreeWalker {
         match operator {
             TokenType::Bang => Some(self.eval_bang_operator_expression(expr)),
             TokenType::Minus => Some(self.eval_minus_prefix_operator_expression(expr)),
-            _ => None,
+            _ => Some(Object::Error(format!(
+                "unknown operator: {}{}",
+                operator, expr
+            ))),
         }
     }
 
@@ -75,7 +129,7 @@ impl TreeWalker {
         operator: TokenType,
         right: Object,
     ) -> Option<Object> {
-        Some(match (left, right) {
+        Some(match (left.clone(), right.clone()) {
             (Object::Integer(l), Object::Integer(r)) => match operator {
                 TokenType::Plus => Object::Integer(l + r),
                 TokenType::Minus => Object::Integer(l - r),
@@ -85,12 +139,16 @@ impl TreeWalker {
                 TokenType::NotEquals => Object::Boolean(l != r),
                 TokenType::GreaterThan => Object::Boolean(l > r),
                 TokenType::LessThan => Object::Boolean(l < r),
-                _ => NULL,
+                _ => Object::Error(format!("unknown operator: {} {} {}", l, operator, r)),
             },
+            (o1 @ _, o2 @ _) if o1.to_string() != o2.to_string() => {
+                Object::Error(format!("type mismatch: {} {} {}", o1, operator, o2))
+            }
+
             _ => match operator {
                 TokenType::Equals => Object::Boolean(left == right),
                 TokenType::NotEquals => Object::Boolean(left != right),
-                _ => NULL,
+                _ => Object::Error(format!("unknown operator: {} {} {}", left, operator, right)),
             },
         })
     }
@@ -107,7 +165,7 @@ impl TreeWalker {
     fn eval_minus_prefix_operator_expression(&self, expr: Object) -> Object {
         match expr {
             Object::Integer(v) => Object::Integer(-v),
-            _ => NULL,
+            v @ _ => Object::Error(format!("unknown operator: -{}", v)),
         }
     }
 
