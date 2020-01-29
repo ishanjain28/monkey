@@ -141,7 +141,7 @@ impl TreeWalker {
                 TokenType::LessThan => Object::Boolean(l < r),
                 _ => Object::Error(format!("unknown operator: {} {} {}", l, operator, r)),
             },
-            (o1 @ _, o2 @ _) if o1.to_string() != o2.to_string() => {
+            (o1, o2) if o1.to_string() != o2.to_string() => {
                 Object::Error(format!("type mismatch: {} {} {}", o1, operator, o2))
             }
 
@@ -165,7 +165,7 @@ impl TreeWalker {
     fn eval_minus_prefix_operator_expression(&self, expr: Object) -> Object {
         match expr {
             Object::Integer(v) => Object::Integer(-v),
-            v @ _ => Object::Error(format!("unknown operator: -{}", v)),
+            v => Object::Error(format!("unknown operator: -{}", v)),
         }
     }
 

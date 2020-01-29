@@ -6,15 +6,15 @@ use std::{
 };
 
 lazy_static! {
-    static ref IDENTMAP: HashMap<&'static str, Token> = {
+    static ref IDENTMAP: HashMap<&'static str, TokenType> = {
         let mut m = HashMap::new();
-        m.insert("fn", Token::new(TokenType::Function));
-        m.insert("let", Token::new(TokenType::Let));
-        m.insert("true", Token::new(TokenType::True));
-        m.insert("false", Token::new(TokenType::False));
-        m.insert("return", Token::new(TokenType::Return));
-        m.insert("if", Token::new(TokenType::If));
-        m.insert("else", Token::new(TokenType::Else));
+        m.insert("fn", TokenType::Function);
+        m.insert("let", TokenType::Let);
+        m.insert("true", TokenType::True);
+        m.insert("false", TokenType::False);
+        m.insert("return", TokenType::Return);
+        m.insert("if", TokenType::If);
+        m.insert("else", TokenType::Else);
         m
     };
 }
@@ -102,7 +102,7 @@ pub struct Token {
 
 impl Token {
     #[inline]
-    pub fn new(name: TokenType) -> Self {
+    pub const fn new(name: TokenType) -> Self {
         Token {
             name,
             literal: None,
@@ -122,6 +122,15 @@ impl Display for Token {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         f.write_fmt(format_args!("{}", self.name))
     }
+}
+
+macro_rules! token {
+    ($token_name:expr) => {
+        Token::new($token_name)
+    };
+    ($token_name:expr, $value:expr) => {
+        Token::with_value($token_name, $value)
+    };
 }
 
 #[derive(Debug, Clone)]
@@ -206,21 +215,21 @@ impl<'a> Iterator for Lexer<'a> {
                 };
                 if is_e {
                     self.read_char();
-                    Some(Token::new(TokenType::Equals))
+                    Some(token!(TokenType::Equals))
                 } else {
-                    Some(Token::new(TokenType::Assign))
+                    Some(token!(TokenType::Assign))
                 }
             }
-            Some('+') => Some(Token::new(TokenType::Plus)),
-            Some('*') => Some(Token::new(TokenType::Asterisk)),
-            Some('/') => Some(Token::new(TokenType::Slash)),
-            Some('-') => Some(Token::new(TokenType::Minus)),
-            Some(',') => Some(Token::new(TokenType::Comma)),
-            Some(';') => Some(Token::new(TokenType::Semicolon)),
-            Some('(') => Some(Token::new(TokenType::LParen)),
-            Some(')') => Some(Token::new(TokenType::RParen)),
-            Some('{') => Some(Token::new(TokenType::LBrace)),
-            Some('}') => Some(Token::new(TokenType::RBrace)),
+            Some('+') => Some(token!(TokenType::Plus)),
+            Some('*') => Some(token!(TokenType::Asterisk)),
+            Some('/') => Some(token!(TokenType::Slash)),
+            Some('-') => Some(token!(TokenType::Minus)),
+            Some(',') => Some(token!(TokenType::Comma)),
+            Some(';') => Some(token!(TokenType::Semicolon)),
+            Some('(') => Some(token!(TokenType::LParen)),
+            Some(')') => Some(token!(TokenType::RParen)),
+            Some('{') => Some(token!(TokenType::LBrace)),
+            Some('}') => Some(token!(TokenType::RBrace)),
             Some('!') => {
                 let is_ne = match self.input.peek() {
                     Some(v) if *v == '=' => true,
@@ -228,27 +237,27 @@ impl<'a> Iterator for Lexer<'a> {
                 };
                 if is_ne {
                     self.read_char();
-                    Some(Token::new(TokenType::NotEquals))
+                    Some(token!(TokenType::NotEquals))
                 } else {
-                    Some(Token::new(TokenType::Bang))
+                    Some(token!(TokenType::Bang))
                 }
             }
-            Some('>') => Some(Token::new(TokenType::GreaterThan)),
-            Some('<') => Some(Token::new(TokenType::LessThan)),
+            Some('>') => Some(token!(TokenType::GreaterThan)),
+            Some('<') => Some(token!(TokenType::LessThan)),
             Some(ch) if is_letter(ch) => {
                 let ident = self.read_identifier(ch);
                 Some(lookup_ident(&ident))
             }
             Some(ch) if ch.is_ascii_digit() => {
                 let number = self.read_number(ch);
-                Some(Token::with_value(TokenType::Int, &number))
+                Some(token!(TokenType::Int, &number))
             }
             None if !self.eof_sent => {
                 self.eof_sent = true;
-                Some(Token::new(TokenType::EOF))
+                Some(token!(TokenType::EOF))
             }
             None => None,
-            _ => Some(Token::new(TokenType::Illegal)),
+            _ => Some(token!(TokenType::Illegal)),
         }
     }
 }
@@ -260,8 +269,8 @@ fn is_letter(c: char) -> bool {
 
 fn lookup_ident(ident: &str) -> Token {
     match IDENTMAP.get(&ident) {
-        Some(v) => v.clone(),
-        None => Token::with_value(TokenType::Ident, ident),
+        Some(v) => token!(*v),
+        None => token!(TokenType::Ident, ident),
     }
 }
 
@@ -274,15 +283,15 @@ mod tests {
         assert_eq!(
             Lexer::new("=+(){},;").collect::<Vec<Token>>(),
             vec![
-                Token::new(TokenType::Assign),
-                Token::new(TokenType::Plus),
-                Token::new(TokenType::LParen),
-                Token::new(TokenType::RParen),
-                Token::new(TokenType::LBrace),
-                Token::new(TokenType::RBrace),
-                Token::new(TokenType::Comma),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::EOF),
+                token!(TokenType::Assign),
+                token!(TokenType::Plus),
+                token!(TokenType::LParen),
+                token!(TokenType::RParen),
+                token!(TokenType::LBrace),
+                token!(TokenType::RBrace),
+                token!(TokenType::Comma),
+                token!(TokenType::Semicolon),
+                token!(TokenType::EOF),
             ],
         );
 
@@ -299,43 +308,43 @@ mod tests {
             )
             .collect::<Vec<Token>>(),
             vec![
-                Token::new(TokenType::Let),
-                Token::with_value(TokenType::Ident, "five"),
-                Token::new(TokenType::Assign),
-                Token::with_value(TokenType::Int, "5"),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::Let),
-                Token::with_value(TokenType::Ident, "ten"),
-                Token::new(TokenType::Assign),
-                Token::with_value(TokenType::Int, "10"),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::Let),
-                Token::with_value(TokenType::Ident, "add"),
-                Token::new(TokenType::Assign),
-                Token::new(TokenType::Function),
-                Token::new(TokenType::LParen),
-                Token::with_value(TokenType::Ident, "x"),
-                Token::new(TokenType::Comma),
-                Token::with_value(TokenType::Ident, "y"),
-                Token::new(TokenType::RParen),
-                Token::new(TokenType::LBrace),
-                Token::with_value(TokenType::Ident, "x"),
-                Token::new(TokenType::Plus),
-                Token::with_value(TokenType::Ident, "y"),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::RBrace),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::Let),
-                Token::with_value(TokenType::Ident, "result"),
-                Token::new(TokenType::Assign),
-                Token::with_value(TokenType::Ident, "add"),
-                Token::new(TokenType::LParen),
-                Token::with_value(TokenType::Ident, "five"),
-                Token::new(TokenType::Comma),
-                Token::with_value(TokenType::Ident, "ten"),
-                Token::new(TokenType::RParen),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::EOF),
+                token!(TokenType::Let),
+                token!(TokenType::Ident, "five"),
+                token!(TokenType::Assign),
+                token!(TokenType::Int, "5"),
+                token!(TokenType::Semicolon),
+                token!(TokenType::Let),
+                token!(TokenType::Ident, "ten"),
+                token!(TokenType::Assign),
+                token!(TokenType::Int, "10"),
+                token!(TokenType::Semicolon),
+                token!(TokenType::Let),
+                token!(TokenType::Ident, "add"),
+                token!(TokenType::Assign),
+                token!(TokenType::Function),
+                token!(TokenType::LParen),
+                token!(TokenType::Ident, "x"),
+                token!(TokenType::Comma),
+                token!(TokenType::Ident, "y"),
+                token!(TokenType::RParen),
+                token!(TokenType::LBrace),
+                token!(TokenType::Ident, "x"),
+                token!(TokenType::Plus),
+                token!(TokenType::Ident, "y"),
+                token!(TokenType::Semicolon),
+                token!(TokenType::RBrace),
+                token!(TokenType::Semicolon),
+                token!(TokenType::Let),
+                token!(TokenType::Ident, "result"),
+                token!(TokenType::Assign),
+                token!(TokenType::Ident, "add"),
+                token!(TokenType::LParen),
+                token!(TokenType::Ident, "five"),
+                token!(TokenType::Comma),
+                token!(TokenType::Ident, "ten"),
+                token!(TokenType::RParen),
+                token!(TokenType::Semicolon),
+                token!(TokenType::EOF),
             ],
         );
 
@@ -358,54 +367,54 @@ mod tests {
             )
             .collect::<Vec<Token>>(),
             vec![
-                Token::new(TokenType::Let),
-                Token::with_value(TokenType::Ident, "result"),
-                Token::new(TokenType::Assign),
-                Token::with_value(TokenType::Ident, "add"),
-                Token::new(TokenType::LParen),
-                Token::with_value(TokenType::Ident, "five"),
-                Token::new(TokenType::Comma),
-                Token::with_value(TokenType::Ident, "ten"),
-                Token::new(TokenType::RParen),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::Bang),
-                Token::new(TokenType::Minus),
-                Token::new(TokenType::Slash),
-                Token::new(TokenType::Asterisk),
-                Token::with_value(TokenType::Int, "5"),
-                Token::new(TokenType::Semicolon),
-                Token::with_value(TokenType::Int, "5"),
-                Token::new(TokenType::LessThan),
-                Token::with_value(TokenType::Int, "10"),
-                Token::new(TokenType::GreaterThan),
-                Token::with_value(TokenType::Int, "5"),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::If),
-                Token::new(TokenType::LParen),
-                Token::with_value(TokenType::Int, "5"),
-                Token::new(TokenType::LessThan),
-                Token::with_value(TokenType::Int, "10"),
-                Token::new(TokenType::RParen),
-                Token::new(TokenType::LBrace),
-                Token::new(TokenType::Return),
-                Token::new(TokenType::True),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::RBrace),
-                Token::new(TokenType::Else),
-                Token::new(TokenType::LBrace),
-                Token::new(TokenType::Return),
-                Token::new(TokenType::False),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::RBrace),
-                Token::with_value(TokenType::Int, "10"),
-                Token::new(TokenType::Equals),
-                Token::with_value(TokenType::Int, "10"),
-                Token::new(TokenType::Semicolon),
-                Token::with_value(TokenType::Int, "9"),
-                Token::new(TokenType::NotEquals),
-                Token::with_value(TokenType::Int, "10"),
-                Token::new(TokenType::Semicolon),
-                Token::new(TokenType::EOF),
+                token!(TokenType::Let),
+                token!(TokenType::Ident, "result"),
+                token!(TokenType::Assign),
+                token!(TokenType::Ident, "add"),
+                token!(TokenType::LParen),
+                token!(TokenType::Ident, "five"),
+                token!(TokenType::Comma),
+                token!(TokenType::Ident, "ten"),
+                token!(TokenType::RParen),
+                token!(TokenType::Semicolon),
+                token!(TokenType::Bang),
+                token!(TokenType::Minus),
+                token!(TokenType::Slash),
+                token!(TokenType::Asterisk),
+                token!(TokenType::Int, "5"),
+                token!(TokenType::Semicolon),
+                token!(TokenType::Int, "5"),
+                token!(TokenType::LessThan),
+                token!(TokenType::Int, "10"),
+                token!(TokenType::GreaterThan),
+                token!(TokenType::Int, "5"),
+                token!(TokenType::Semicolon),
+                token!(TokenType::If),
+                token!(TokenType::LParen),
+                token!(TokenType::Int, "5"),
+                token!(TokenType::LessThan),
+                token!(TokenType::Int, "10"),
+                token!(TokenType::RParen),
+                token!(TokenType::LBrace),
+                token!(TokenType::Return),
+                token!(TokenType::True),
+                token!(TokenType::Semicolon),
+                token!(TokenType::RBrace),
+                token!(TokenType::Else),
+                token!(TokenType::LBrace),
+                token!(TokenType::Return),
+                token!(TokenType::False),
+                token!(TokenType::Semicolon),
+                token!(TokenType::RBrace),
+                token!(TokenType::Int, "10"),
+                token!(TokenType::Equals),
+                token!(TokenType::Int, "10"),
+                token!(TokenType::Semicolon),
+                token!(TokenType::Int, "9"),
+                token!(TokenType::NotEquals),
+                token!(TokenType::Int, "10"),
+                token!(TokenType::Semicolon),
+                token!(TokenType::EOF),
             ],
         );
     }

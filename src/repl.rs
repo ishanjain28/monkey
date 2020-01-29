@@ -1,9 +1,11 @@
-use crate::{
-    evaluator::{tree_walker::TreeWalker, Evaluator},
-    lexer::Lexer,
-    parser::{ast::Node, Error as ParserError, Parser},
+use {
+    crate::{
+        evaluator::{tree_walker::TreeWalker, Evaluator},
+        lexer::Lexer,
+        parser::{ast::Node, Error as ParserError, Parser},
+    },
+    std::io::{self, BufRead, Result as IoResult, Write},
 };
-use std::io::{self, BufRead, Result as IoResult, Write};
 
 const PROMPT: &[u8] = b">> ";
 

@@ -1,4 +1,5 @@
 pub mod ast;
+
 use {
     crate::{
         lexer::{Lexer, Token, TokenType},
@@ -6,7 +7,7 @@ use {
     },
     std::{
         collections::HashMap,
-        fmt::{Display, Error as FmtError, Formatter},
+        fmt::{Display, Formatter, Result as FmtResult},
         iter::Peekable,
     },
 };
@@ -158,7 +159,7 @@ pub struct Error {
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+    fn fmt(&self, f: &mut Formatter) -> FmtResult {
         f.write_str(&self.reason)
     }
 }
@@ -263,7 +264,7 @@ mod tests {
         assert_eq!(
             program.statements,
             vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                Token::with_value(TokenType::Ident, "foobar"),
+                token!(TokenType::Ident, "foobar"),
                 Expression::Identifier(Identifier::new(TokenType::Ident, "foobar")),
             ))]
         );
@@ -281,7 +282,7 @@ mod tests {
         assert_eq!(
             program.unwrap().statements,
             vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                Token::with_value(TokenType::Int, "5"),
+                token!(TokenType::Int, "5"),
                 Expression::IntegerLiteral(IntegerLiteral::new(5))
             ))]
         );
@@ -293,7 +294,7 @@ mod tests {
             (
                 "!5",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Bang),
+                    token!(TokenType::Bang),
                     Expression::PrefixExpression(PrefixExpression::new(
                         TokenType::Bang,
                         Expression::IntegerLiteral(IntegerLiteral::new(5)),
@@ -303,7 +304,7 @@ mod tests {
             (
                 "-15;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Minus),
+                    token!(TokenType::Minus),
                     Expression::PrefixExpression(PrefixExpression::new(
                         TokenType::Minus,
                         Expression::IntegerLiteral(IntegerLiteral::new(15)),
@@ -313,7 +314,7 @@ mod tests {
             (
                 "!foobar;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Bang),
+                    token!(TokenType::Bang),
                     Expression::PrefixExpression(PrefixExpression::new(
                         TokenType::Bang,
                         Expression::Identifier(Identifier::new(TokenType::Ident, "foobar")),
@@ -323,7 +324,7 @@ mod tests {
             (
                 "!true;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Bang),
+                    token!(TokenType::Bang),
                     Expression::PrefixExpression(PrefixExpression::new(
                         TokenType::Bang,
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
@@ -333,7 +334,7 @@ mod tests {
             (
                 "!false;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Bang),
+                    token!(TokenType::Bang),
                     Expression::PrefixExpression(PrefixExpression::new(
                         TokenType::Bang,
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
@@ -343,7 +344,7 @@ mod tests {
             (
                 "!isGreaterThanZero( 2);",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Bang),
+                    token!(TokenType::Bang),
                     Expression::PrefixExpression(PrefixExpression::new(
                         TokenType::Bang,
                         Expression::CallExpression(CallExpression::new(
@@ -367,7 +368,7 @@ mod tests {
             (
                 "5 + 10;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Int, "5"),
+                    token!(TokenType::Int, "5"),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::IntegerLiteral(IntegerLiteral::new(5)),
                         TokenType::Plus,
@@ -378,7 +379,7 @@ mod tests {
             (
                 "5 - 10;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Int, "5"),
+                    token!(TokenType::Int, "5"),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::IntegerLiteral(IntegerLiteral::new(5)),
                         TokenType::Minus,
@@ -389,7 +390,7 @@ mod tests {
             (
                 "5 * 15;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Int, "5"),
+                    token!(TokenType::Int, "5"),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::IntegerLiteral(IntegerLiteral::new(5)),
                         TokenType::Asterisk,
@@ -400,7 +401,7 @@ mod tests {
             (
                 "15 / 3;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Int, "15"),
+                    token!(TokenType::Int, "15"),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::IntegerLiteral(IntegerLiteral::new(15)),
                         TokenType::Slash,
@@ -411,7 +412,7 @@ mod tests {
             (
                 "5 > 15;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Int, "5"),
+                    token!(TokenType::Int, "5"),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::IntegerLiteral(IntegerLiteral::new(5)),
                         TokenType::GreaterThan,
@@ -422,7 +423,7 @@ mod tests {
             (
                 "a + b + c;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Ident, "a"),
+                    token!(TokenType::Ident, "a"),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::InfixExpression(InfixExpression::new(
                             Expression::Identifier(Identifier::new(TokenType::Ident, "a")),
@@ -437,7 +438,7 @@ mod tests {
             (
                 "true == true",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::True),
+                    token!(TokenType::True),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
                         TokenType::Equals,
@@ -448,7 +449,7 @@ mod tests {
             (
                 "true != false",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::True),
+                    token!(TokenType::True),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
                         TokenType::NotEquals,
@@ -459,7 +460,7 @@ mod tests {
             (
                 "false == false",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::False),
+                    token!(TokenType::False),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
                         TokenType::Equals,
@@ -521,14 +522,14 @@ mod tests {
             (
                 "true;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::True),
+                    token!(TokenType::True),
                     Expression::BooleanExpression(BooleanExpression::new(TokenType::True)),
                 ))],
             ),
             (
                 "false;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::False),
+                    token!(TokenType::False),
                     Expression::BooleanExpression(BooleanExpression::new(TokenType::False)),
                 ))],
             ),
@@ -547,7 +548,7 @@ mod tests {
         let test_cases = [(
             "if (x > y) { x };",
             vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                Token::new(TokenType::If),
+                token!(TokenType::If),
                 Expression::IfExpression(IfExpression::new(
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
@@ -556,7 +557,7 @@ mod tests {
                     )),
                     BlockStatement::new(vec![Statement::ExpressionStatement(
                         ExpressionStatement::new(
-                            Token::with_value(TokenType::Ident, "x"),
+                            token!(TokenType::Ident, "x"),
                             Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
                         ),
                     )]),
@@ -572,7 +573,7 @@ mod tests {
         let test_cases = [(
             "if (x > y) { x } else { y };",
             vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                Token::new(TokenType::If),
+                token!(TokenType::If),
                 Expression::IfExpression(IfExpression::new(
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
@@ -581,13 +582,13 @@ mod tests {
                     )),
                     BlockStatement::new(vec![Statement::ExpressionStatement(
                         ExpressionStatement::new(
-                            Token::with_value(TokenType::Ident, "x"),
+                            token!(TokenType::Ident, "x"),
                             Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
                         ),
                     )]),
                     Some(BlockStatement::new(vec![Statement::ExpressionStatement(
                         ExpressionStatement::new(
-                            Token::with_value(TokenType::Ident, "y"),
+                            token!(TokenType::Ident, "y"),
                             Expression::Identifier(Identifier::new(TokenType::Ident, "y")),
                         ),
                     )])),
@@ -603,16 +604,16 @@ mod tests {
             (
                 "fn(a,b) {x + y;}",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Function),
+                    token!(TokenType::Function),
                     Expression::FunctionExpression(FunctionLiteral::new(
-                        Token::new(TokenType::Function),
+                        token!(TokenType::Function),
                         vec![
                             Identifier::new(TokenType::Ident, "a"),
                             Identifier::new(TokenType::Ident, "b"),
                         ],
                         BlockStatement::new(vec![Statement::ExpressionStatement(
                             ExpressionStatement::new(
-                                Token::with_value(TokenType::Ident, "x"),
+                                token!(TokenType::Ident, "x"),
                                 Expression::InfixExpression(InfixExpression::new(
                                     Expression::Identifier(Identifier::new(TokenType::Ident, "x")),
                                     TokenType::Plus,
@@ -626,9 +627,9 @@ mod tests {
             (
                 "fn() {}",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Function),
+                    token!(TokenType::Function),
                     Expression::FunctionExpression(FunctionLiteral::new(
-                        Token::new(TokenType::Function),
+                        token!(TokenType::Function),
                         vec![],
                         BlockStatement::new(vec![]),
                     )),
@@ -637,9 +638,9 @@ mod tests {
             (
                 "fn(x,ya,z) {}",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Function),
+                    token!(TokenType::Function),
                     Expression::FunctionExpression(FunctionLiteral::new(
-                        Token::new(TokenType::Function),
+                        token!(TokenType::Function),
                         vec![
                             Identifier::new(TokenType::Ident, "x"),
                             Identifier::new(TokenType::Ident, "ya"),
@@ -652,9 +653,9 @@ mod tests {
             (
                 "fn(a) {}",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Function),
+                    token!(TokenType::Function),
                     Expression::FunctionExpression(FunctionLiteral::new(
-                        Token::new(TokenType::Function),
+                        token!(TokenType::Function),
                         vec![Identifier::new(TokenType::Ident, "a")],
                         BlockStatement::new(vec![]),
                     )),
@@ -663,9 +664,9 @@ mod tests {
             (
                 "fn(a,b,abc) {(x + y) * (a -b);}",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::new(TokenType::Function),
+                    token!(TokenType::Function),
                     Expression::FunctionExpression(FunctionLiteral::new(
-                        Token::new(TokenType::Function),
+                        token!(TokenType::Function),
                         vec![
                             Identifier::new(TokenType::Ident, "a"),
                             Identifier::new(TokenType::Ident, "b"),
@@ -673,7 +674,7 @@ mod tests {
                         ],
                         BlockStatement::new(vec![Statement::ExpressionStatement(
                             ExpressionStatement::new(
-                                Token::new(TokenType::LParen),
+                                token!(TokenType::LParen),
                                 Expression::InfixExpression(InfixExpression::new(
                                     Expression::InfixExpression(InfixExpression::new(
                                         Expression::Identifier(Identifier::new(
@@ -714,7 +715,7 @@ mod tests {
             (
                 "add(1, 2 * 3, 4 + 5);",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Ident, "add"),
+                    token!(TokenType::Ident, "add"),
                     Expression::CallExpression(CallExpression::new(
                         Expression::Identifier(Identifier::new(TokenType::Ident, "add")),
                         vec![
@@ -736,7 +737,7 @@ mod tests {
             (
                 "a + add(1, 2 * 3, 4 + 5) + d;",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Ident, "a"),
+                    token!(TokenType::Ident, "a"),
                     Expression::InfixExpression(InfixExpression::new(
                         Expression::InfixExpression(InfixExpression::new(
                             Expression::Identifier(Identifier::new(TokenType::Ident, "a")),
@@ -766,7 +767,7 @@ mod tests {
             (
                 "add(a,b,1, 2 * 3, 4 + 5, add(6,7 *8));",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Ident, "add"),
+                    token!(TokenType::Ident, "add"),
                     Expression::CallExpression(CallExpression::new(
                         Expression::Identifier(Identifier::new(TokenType::Ident, "add")),
                         vec![
@@ -801,7 +802,7 @@ mod tests {
             (
                 "add(a + b + c * d / f + g);",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Ident, "add"),
+                    token!(TokenType::Ident, "add"),
                     Expression::CallExpression(CallExpression::new(
                         Expression::Identifier(Identifier::new(TokenType::Ident, "add")),
                         vec![Expression::InfixExpression(InfixExpression::new(
@@ -837,7 +838,7 @@ mod tests {
             (
                 "add();",
                 vec![Statement::ExpressionStatement(ExpressionStatement::new(
-                    Token::with_value(TokenType::Ident, "add"),
+                    token!(TokenType::Ident, "add"),
                     Expression::CallExpression(CallExpression::new(
                         Expression::Identifier(Identifier::new(TokenType::Ident, "add")),
                         vec![],
