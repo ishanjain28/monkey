@@ -1,8 +1,9 @@
 use {
-    crate::parser::ast::Node,
+    crate::parser::ast::{BlockStatement, Identifier, Node},
+    itertools::Itertools,
     std::{
         collections::HashMap,
-        fmt::{Display, Formatter, Result as FmtResult},
+        fmt::{Display, Formatter, Result as FmtResult, Write},
     },
 };
 pub mod tree_walker;
@@ -11,33 +12,47 @@ pub trait Evaluator {
     fn eval(&self, node: Node, env: &mut Environment) -> Option<Object>;
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Environment {
     store: HashMap<String, Object>,
+    outer: Option<Box<Environment>>,
 }
 
 impl Environment {
     pub fn new() -> Self {
         Self {
             store: HashMap::new(),
+            outer: None,
         }
     }
     pub fn get(&self, name: &str) -> Option<Object> {
         match self.store.get(name) {
             Some(v) => Some(v.clone()),
-            None => None,
+            None => match &self.outer {
+                Some(outer) => outer.get(name),
+                None => None,
+            },
         }
     }
     pub fn set(&mut self, name: String, val: Object) {
         self.store.insert(name, val);
     }
+
+    pub fn new_enclosed(env: Environment) -> Self {
+        Self {
+            store: HashMap::new(),
+            outer: Some(Box::new(env)),
+        }
+    }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Object {
     Integer(i64),
     Boolean(bool),
     ReturnValue(Box<Object>),
     Error(String),
+    Function(Function),
     Null,
 }
 
@@ -53,6 +68,18 @@ impl Object {
             Object::ReturnValue(ret) => ret.inspect(),
             Object::Error(s) => s.to_string(),
             Object::Null => "NULL".into(),
+            Object::Function(s) => {
+                let mut out = String::new();
+
+                out.write_fmt(format_args!(
+                    "fn({}) {{ {} }}",
+                    s.parameters.iter().map(|x| x.to_string()).join(", "),
+                    s.body.to_string()
+                ))
+                .unwrap();
+
+                out
+            }
         }
     }
 }
@@ -64,13 +91,23 @@ impl Display for Object {
             Object::Boolean(_) => "BOOLEAN",
             Object::ReturnValue(_) => "RETURN_VALUE",
             Object::Error(_) => "ERROR",
+            Object::Function(_) => "FUNCTION",
             Object::Null => "NULL",
         })
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Function {
+    parameters: Vec<Identifier>,
+    body: BlockStatement,
+    env: Environment,
+}
+
 #[cfg(test)]
 mod tests {
+    use std::assert_matches::assert_matches;
+
     use crate::{
         evaluator::{tree_walker::TreeWalker, Environment, Evaluator, Object, FALSE, NULL, TRUE},
         lexer::Lexer,
@@ -253,6 +290,58 @@ mod tests {
                 "let a = 5; let b = a; let c = a + b +5; c;",
                 Some(Object::Integer(15)),
             ),
+        ];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn test_function_object() {
+        let test_case = "fn(x) { x + 2;};";
+
+        let lexer = Lexer::new(&test_case);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program();
+        assert!(program.is_some());
+        let program = program.unwrap();
+        let evaluator = TreeWalker::new();
+        let mut env = Environment::new();
+        let eval = evaluator.eval(Node::Program(program), &mut env);
+        let node = eval.unwrap();
+
+        assert_matches!(node, Object::Function(_));
+
+        if let Object::Function(ref f) = node {
+            assert_eq!(f.parameters.len(), 1);
+            assert_eq!(f.parameters.first().unwrap().to_string(), "x");
+            assert_eq!(f.body.to_string(), "(x + 2)");
+        }
+    }
+
+    #[test]
+    fn test_function_application() {
+        let test_cases = [
+            (
+                "let identity = fn(x) { x; }; identity(5);",
+                Some(Object::Integer(5)),
+            ),
+            (
+                "let identity = fn(x) { return x; }; identity(9);",
+                Some(Object::Integer(9)),
+            ),
+            (
+                "let double = fn(x) { return x * 2; }; double(8);",
+                Some(Object::Integer(16)),
+            ),
+            (
+                "let add = fn(x,y) { return x +y; }; add(10, 20);",
+                Some(Object::Integer(30)),
+            ),
+            (
+                "let add = fn(x,y) { return x +y; }; add(20 + 25, add(3+1,2)));",
+                Some(Object::Integer(51)),
+            ),
+            ("fn(x) { x; }(5)", Some(Object::Integer(5))),
         ];
 
         run_test_cases(&test_cases);

@@ -34,7 +34,7 @@ impl Display for Program {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Statement {
     Let(LetStatement),
     Return(ReturnStatement),
@@ -65,7 +65,7 @@ impl Display for Statement {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct LetStatement {
     // name field is to store the identifier of the binding
     pub name: Identifier,
@@ -113,7 +113,7 @@ impl Display for LetStatement {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ReturnStatement {
     pub value: Option<Expression>,
 }
@@ -145,7 +145,7 @@ impl Display for ReturnStatement {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ExpressionStatement {
     token: Token,
     pub expression: Expression,
@@ -184,7 +184,7 @@ pub enum ExpressionPriority {
     Call = 6,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Expression {
     Identifier(Identifier),
     IntegerLiteral(IntegerLiteral),
@@ -263,10 +263,10 @@ impl From<&Expression> for String {
 // Identifier will be an expression
 // Identifier in a let statement like, let x = 5; where `x` is an identifier doesn't produce a value
 // but an identifier *can* produce value when used on rhs, e.g. let x = y; Here `y` is producing a value
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Identifier {
     token: TokenType,
-    value: String,
+    pub value: String,
 }
 
 impl Identifier {
@@ -290,7 +290,7 @@ impl Display for Identifier {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct IntegerLiteral {
     pub value: i64,
 }
@@ -313,7 +313,7 @@ impl IntegerLiteral {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PrefixExpression {
     pub operator: TokenType,
     pub right: Box<Expression>,
@@ -347,7 +347,7 @@ impl Display for PrefixExpression {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct InfixExpression {
     pub left: Box<Expression>,
     pub operator: TokenType,
@@ -383,7 +383,7 @@ impl Display for InfixExpression {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BooleanExpression {
     token: TokenType,
     pub value: bool,
@@ -409,7 +409,7 @@ impl Display for BooleanExpression {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct IfExpression {
     pub condition: Box<Expression>,
     pub consequence: BlockStatement,
@@ -461,7 +461,7 @@ impl Display for IfExpression {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct BlockStatement {
     pub statements: Vec<Statement>,
 }
@@ -501,11 +501,11 @@ impl Display for BlockStatement {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FunctionLiteral {
     token: Token,
-    parameters: Vec<Identifier>,
-    body: BlockStatement,
+    pub parameters: Vec<Identifier>,
+    pub body: BlockStatement,
 }
 
 impl FunctionLiteral {
@@ -567,10 +567,10 @@ impl Display for FunctionLiteral {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CallExpression {
-    function: Box<Expression>,
-    arguments: Vec<Expression>,
+    pub function: Box<Expression>,
+    pub arguments: Vec<Expression>,
 }
 
 impl CallExpression {

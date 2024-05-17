@@ -10,7 +10,7 @@ use crate::{
     },
 };
 
-use super::Environment;
+use super::{Environment, Function};
 
 pub struct TreeWalker;
 
@@ -34,12 +34,10 @@ impl Evaluator for TreeWalker {
                     Some(Object::ReturnValue(Box::new(ret_val)))
                 }
                 Statement::Let(LetStatement { name, value }) => {
-                    let value = self.eval(Node::Expression(value.unwrap()), env)?;
+                    let value = self.eval(Node::Expression(value?), env)?;
                     env.set(name.to_string(), value.clone());
                     Some(value)
                 }
-
-                _ => None,
             },
             Node::Expression(expr) => match expr {
                 Expression::Identifier(v) => self.eval_identifier(v, env),
@@ -53,6 +51,24 @@ impl Evaluator for TreeWalker {
                     let left = self.eval(Node::Expression(*ie.left), env)?;
                     let right = self.eval(Node::Expression(*ie.right), env)?;
                     self.eval_infix_expression(left, ie.operator, right)
+                }
+                Expression::FunctionExpression(fnl) => {
+                    return Some(Object::Function(Function {
+                        body: fnl.body,
+                        parameters: fnl.parameters,
+                        env: env.clone(),
+                    }))
+                }
+                Expression::CallExpression(v) => {
+                    let function = self.eval(Node::Expression(*v.function), env)?;
+                    // Resolve function arguments and update the environment
+                    // before executing function body
+                    let args = match self.eval_expression(v.arguments, env) {
+                        Ok(v) => v,
+                        Err(e) => return Some(e),
+                    };
+
+                    self.apply_function(function, args)
                 }
                 Expression::IfExpression(ie) => {
                     let condition = self.eval(Node::Expression(*ie.condition), env)?;
@@ -198,5 +214,55 @@ impl TreeWalker {
             "identifier not found: {}",
             node.to_string()
         ))))
+    }
+
+    fn eval_expression(
+        &self,
+        exprs: Vec<Expression>,
+        env: &mut Environment,
+    ) -> Result<Vec<Object>, Object> {
+        let mut out = vec![];
+
+        for expr in exprs {
+            match self.eval(Node::Expression(expr), env) {
+                Some(v @ Object::Error(_)) => return Err(v),
+                Some(v) => out.push(v),
+                None => {
+                    break;
+                }
+            }
+        }
+
+        Ok(out)
+    }
+
+    fn apply_function(&self, function: Object, args: Vec<Object>) -> Option<Object> {
+        let function = match function {
+            Object::Function(f) => f,
+            v => return Some(Object::Error(format!("not a function: {}", v.to_string()))),
+        };
+
+        let mut enclosed_env = Environment::new_enclosed(function.env);
+        for (i, parameter) in function.parameters.iter().enumerate() {
+            if args.len() <= i {
+                println!("{:?} {}", args, i);
+                return Some(Object::Error(format!("incorrect number of arguments")));
+            }
+
+            enclosed_env.set(parameter.value.clone(), args[i].clone());
+        }
+
+        let resp = self.eval(
+            Node::Statement(Statement::BlockStatement(function.body)),
+            &mut enclosed_env,
+        );
+
+        // Unwrap return here to prevent it from bubbling up the stack
+        // and stopping execution elsewhere.
+        if let Some(Object::ReturnValue(v)) = resp.as_ref() {
+            return Some(*v.clone());
+        }
+
+        resp
     }
 }
