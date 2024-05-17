@@ -5,5 +5,5 @@ authors = ["ishanjain28 <ishanjain28@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+itertools = "0.10.5"
 lazy_static = "1.4.0"
-itertools = "0.8.2"

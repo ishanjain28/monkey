@@ -68,9 +68,9 @@ impl Display for Statement {
 #[derive(Debug, PartialEq)]
 pub struct LetStatement {
     // name field is to store the identifier of the binding
-    name: Identifier,
+    pub name: Identifier,
     // value is to store the expression that'll produce value
-    value: Option<Expression>,
+    pub value: Option<Expression>,
 }
 
 impl LetStatement {

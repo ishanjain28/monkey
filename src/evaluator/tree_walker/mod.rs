@@ -4,8 +4,13 @@
 use crate::{
     evaluator::{Evaluator, Object, FALSE, NULL, TRUE},
     lexer::TokenType,
-    parser::ast::{BlockStatement, Expression, ExpressionStatement, Node, Program, Statement},
+    parser::ast::{
+        BlockStatement, Expression, ExpressionStatement, Identifier, LetStatement, Node, Program,
+        Statement,
+    },
 };
+
+use super::Environment;
 
 pub struct TreeWalker;
 
@@ -16,39 +21,49 @@ impl TreeWalker {
 }
 
 impl Evaluator for TreeWalker {
-    fn eval(&self, node: Node) -> Option<Object> {
+    fn eval(&self, node: Node, env: &mut Environment) -> Option<Object> {
         match node {
-            Node::Program(p) => self.eval_program(p),
+            Node::Program(p) => self.eval_program(p, env),
             Node::Statement(stmt) => match stmt {
                 Statement::ExpressionStatement(ExpressionStatement { expression, .. }) => {
-                    self.eval(Node::Expression(expression))
+                    self.eval(Node::Expression(expression), env)
                 }
-                Statement::BlockStatement(bs) => self.eval_block_statement(bs),
+                Statement::BlockStatement(bs) => self.eval_block_statement(bs, env),
                 Statement::Return(ret) => {
-                    let ret_val = self.eval(Node::Expression(ret.value?))?;
+                    let ret_val = self.eval(Node::Expression(ret.value?), env)?;
                     Some(Object::ReturnValue(Box::new(ret_val)))
                 }
+                Statement::Let(LetStatement { name, value }) => {
+                    let value = self.eval(Node::Expression(value.unwrap()), env)?;
+                    env.set(name.to_string(), value.clone());
+                    Some(value)
+                }
+
                 _ => None,
             },
             Node::Expression(expr) => match expr {
+                Expression::Identifier(v) => self.eval_identifier(v, env),
                 Expression::IntegerLiteral(il) => Some(Object::Integer(il.value)),
                 Expression::BooleanExpression(b) => Some(Object::Boolean(b.value)),
                 Expression::PrefixExpression(p) => {
-                    let expr = self.eval(Node::Expression(*p.right))?;
+                    let expr = self.eval(Node::Expression(*p.right), env)?;
                     self.eval_prefix_expression(p.operator, expr)
                 }
                 Expression::InfixExpression(ie) => {
-                    let left = self.eval(Node::Expression(*ie.left))?;
-                    let right = self.eval(Node::Expression(*ie.right))?;
+                    let left = self.eval(Node::Expression(*ie.left), env)?;
+                    let right = self.eval(Node::Expression(*ie.right), env)?;
                     self.eval_infix_expression(left, ie.operator, right)
                 }
                 Expression::IfExpression(ie) => {
-                    let condition = self.eval(Node::Expression(*ie.condition))?;
+                    let condition = self.eval(Node::Expression(*ie.condition), env)?;
 
                     if self.is_truthy(&condition) {
-                        self.eval(Node::Statement(Statement::BlockStatement(ie.consequence)))
+                        self.eval(
+                            Node::Statement(Statement::BlockStatement(ie.consequence)),
+                            env,
+                        )
                     } else if let Some(alternative) = ie.alternative {
-                        self.eval(Node::Statement(Statement::BlockStatement(alternative)))
+                        self.eval(Node::Statement(Statement::BlockStatement(alternative)), env)
                     } else {
                         Some(NULL)
                     }
@@ -60,16 +75,16 @@ impl Evaluator for TreeWalker {
 }
 
 impl TreeWalker {
-    fn eval_program(&self, prg: Program) -> Option<Object> {
+    fn eval_program(&self, prg: Program, env: &mut Environment) -> Option<Object> {
         let mut out: Option<Object> = None;
         for stmt in prg.statements {
-            out = self.eval(Node::Statement(stmt));
+            out = self.eval(Node::Statement(stmt), env);
             // No need to evaluate any more statements from a statements vector once we
             // get a return keyword. nothing after in the block matters.
-            if let Some(out) = out.clone() {
+            if let Some(out) = out.as_ref() {
                 match out {
-                    Object::ReturnValue(v) => return Some(*v),
-                    Object::Error(_) => return Some(out),
+                    Object::ReturnValue(v) => return Some(*v.clone()),
+                    Object::Error(_) => return Some(out.clone()),
                     _ => {}
                 }
             }
@@ -77,11 +92,11 @@ impl TreeWalker {
         out
     }
 
-    fn eval_block_statement(&self, bs: BlockStatement) -> Option<Object> {
+    fn eval_block_statement(&self, bs: BlockStatement, env: &mut Environment) -> Option<Object> {
         let mut out: Option<Object> = None;
 
         for stmt in bs.statements {
-            out = self.eval(Node::Statement(stmt));
+            out = self.eval(Node::Statement(stmt), env);
 
             // TODO: Find a nicer way to do this. :(
             // The objective here is,
@@ -99,12 +114,12 @@ impl TreeWalker {
             // But in reality that shouldn't happen. It should be returning 10
             // So, We don't unwrap the ReturnValue node when we encounter 10. Just return it as is and it is later eval-ed
             // and the correct value is returned
-            if let Some(out) = out.clone() {
+            if let Some(out) = out.as_ref() {
                 match out {
-                    Object::ReturnValue(v) => {
-                        return Some(Object::ReturnValue(v));
+                    Object::ReturnValue(_) => {
+                        return Some(out.clone());
                     }
-                    Object::Error(_) => return Some(out),
+                    Object::Error(_) => return Some(out.clone()),
                     _ => {}
                 }
             }
@@ -176,5 +191,12 @@ impl TreeWalker {
             FALSE => false,
             _ => true,
         }
+    }
+
+    fn eval_identifier(&self, node: Identifier, env: &mut Environment) -> Option<Object> {
+        env.get(&node.to_string()).or(Some(Object::Error(format!(
+            "identifier not found: {}",
+            node.to_string()
+        ))))
     }
 }

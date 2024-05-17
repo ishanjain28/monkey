@@ -1,11 +1,35 @@
 use {
     crate::parser::ast::Node,
-    std::fmt::{Display, Formatter, Result as FmtResult},
+    std::{
+        collections::HashMap,
+        fmt::{Display, Formatter, Result as FmtResult},
+    },
 };
 pub mod tree_walker;
 
 pub trait Evaluator {
-    fn eval(&self, node: Node) -> Option<Object>;
+    fn eval(&self, node: Node, env: &mut Environment) -> Option<Object>;
+}
+
+pub struct Environment {
+    store: HashMap<String, Object>,
+}
+
+impl Environment {
+    pub fn new() -> Self {
+        Self {
+            store: HashMap::new(),
+        }
+    }
+    pub fn get(&self, name: &str) -> Option<Object> {
+        match self.store.get(name) {
+            Some(v) => Some(v.clone()),
+            None => None,
+        }
+    }
+    pub fn set(&mut self, name: String, val: Object) {
+        self.store.insert(name, val);
+    }
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -48,7 +72,7 @@ impl Display for Object {
 #[cfg(test)]
 mod tests {
     use crate::{
-        evaluator::{tree_walker::TreeWalker, Evaluator, Object, FALSE, NULL, TRUE},
+        evaluator::{tree_walker::TreeWalker, Environment, Evaluator, Object, FALSE, NULL, TRUE},
         lexer::Lexer,
         parser::{ast::Node, Parser},
     };
@@ -61,7 +85,8 @@ mod tests {
             assert!(program.is_some());
             let program = program.unwrap();
             let evaluator = TreeWalker::new();
-            let eval = evaluator.eval(Node::Program(program));
+            let mut env = Environment::new();
+            let eval = evaluator.eval(Node::Program(program), &mut env);
             assert_eq!(eval, test.1);
         }
     }
@@ -208,6 +233,25 @@ mod tests {
                 return 1;
             }",
                 Some(Object::Error("unknown operator: BOOLEAN + BOOLEAN".into())),
+            ),
+            (
+                "foobar",
+                Some(Object::Error("identifier not found: foobar".into())),
+            ),
+        ];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn test_let_statements() {
+        let test_cases = [
+            ("let a = 5; a;", Some(Object::Integer(5))),
+            ("let a = 5*5; a;", Some(Object::Integer(25))),
+            ("let a = 5; let b = a; b;", Some(Object::Integer(5))),
+            (
+                "let a = 5; let b = a; let c = a + b +5; c;",
+                Some(Object::Integer(15)),
             ),
         ];
 
