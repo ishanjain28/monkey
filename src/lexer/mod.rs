@@ -158,7 +158,7 @@ impl<'a> Lexer<'a> {
     fn read_identifier(&mut self, first: char) -> String {
         let mut ident = String::new();
         ident.push(first);
-        while self.peek_is_letter() {
+        while self.peek_is_letter() || self.peek_is_ascii_digit() {
             ident.push(self.read_char().unwrap());
         }
         ident

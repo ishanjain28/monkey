@@ -346,4 +346,38 @@ mod tests {
 
         run_test_cases(&test_cases);
     }
+
+    #[test]
+    fn test_closure() {
+        let test_cases = [(
+            "let newAdder = fn(x) {
+                fn(y) { x + y ; } ;
+            };
+            let adder5 = newAdder(5);
+            adder5(10);
+            ",
+            Some(Object::Integer(15)),
+        )];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn memory_test() {
+        let test_cases = [(
+            "let counter = fn(x) {
+                if (x > 100 ) {
+                    return true;
+                } else {
+                    let foobar = 9999;
+                    counter(x+1);
+                }
+            };
+            counter(0);
+            ",
+            Some(Object::Integer(15)),
+        )];
+
+        run_test_cases(&test_cases);
+    }
 }

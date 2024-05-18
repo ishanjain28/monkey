@@ -84,7 +84,6 @@ impl Evaluator for TreeWalker {
                         Some(NULL)
                     }
                 }
-                _ => None,
             },
         }
     }
@@ -239,13 +238,16 @@ impl TreeWalker {
     fn apply_function(&self, function: Object, args: Vec<Object>) -> Option<Object> {
         let function = match function {
             Object::Function(f) => f,
+            Object::Error(e) => {
+                return Some(Object::Error(format!("not a function: {}", e.to_string())));
+            }
             v => return Some(Object::Error(format!("not a function: {}", v.to_string()))),
         };
+        println!("{:?}", function.env);
 
         let mut enclosed_env = Environment::new_enclosed(function.env);
         for (i, parameter) in function.parameters.iter().enumerate() {
             if args.len() <= i {
-                println!("{:?} {}", args, i);
                 return Some(Object::Error(format!("incorrect number of arguments")));
             }
 
