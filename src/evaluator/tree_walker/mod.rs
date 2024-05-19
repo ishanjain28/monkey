@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 // TODO: This is all a mess. Almost certainly because right now, I don't know any better way to do this.
 // It's just constantly unwrapping enums from one place and rewrapping it to some other enum(or even the same enum) and returning it
 // The error handling story is pretty bad too
@@ -21,7 +23,7 @@ impl TreeWalker {
 }
 
 impl Evaluator for TreeWalker {
-    fn eval(&self, node: Node, env: &mut Environment) -> Option<Object> {
+    fn eval(&self, node: Node, env: Rc<RefCell<Environment>>) -> Option<Object> {
         match node {
             Node::Program(p) => self.eval_program(p, env),
             Node::Statement(stmt) => match stmt {
@@ -34,8 +36,10 @@ impl Evaluator for TreeWalker {
                     Some(Object::ReturnValue(Box::new(ret_val)))
                 }
                 Statement::Let(LetStatement { name, value }) => {
-                    let value = self.eval(Node::Expression(value?), env)?;
+                    let value = self.eval(Node::Expression(value?), env.clone())?;
+                    let mut env = env.borrow_mut();
                     env.set(name.to_string(), value.clone());
+
                     Some(value)
                 }
             },
@@ -48,7 +52,7 @@ impl Evaluator for TreeWalker {
                     self.eval_prefix_expression(p.operator, expr)
                 }
                 Expression::InfixExpression(ie) => {
-                    let left = self.eval(Node::Expression(*ie.left), env)?;
+                    let left = self.eval(Node::Expression(*ie.left), env.clone())?;
                     let right = self.eval(Node::Expression(*ie.right), env)?;
                     self.eval_infix_expression(left, ie.operator, right)
                 }
@@ -56,11 +60,11 @@ impl Evaluator for TreeWalker {
                     return Some(Object::Function(Function {
                         body: fnl.body,
                         parameters: fnl.parameters,
-                        env: env.clone(),
-                    }))
+                        env: env,
+                    }));
                 }
                 Expression::CallExpression(v) => {
-                    let function = self.eval(Node::Expression(*v.function), env)?;
+                    let function = self.eval(Node::Expression(*v.function), env.clone())?;
                     // Resolve function arguments and update the environment
                     // before executing function body
                     let args = match self.eval_expression(v.arguments, env) {
@@ -71,7 +75,7 @@ impl Evaluator for TreeWalker {
                     self.apply_function(function, args)
                 }
                 Expression::IfExpression(ie) => {
-                    let condition = self.eval(Node::Expression(*ie.condition), env)?;
+                    let condition = self.eval(Node::Expression(*ie.condition), env.clone())?;
 
                     if self.is_truthy(&condition) {
                         self.eval(
@@ -90,10 +94,10 @@ impl Evaluator for TreeWalker {
 }
 
 impl TreeWalker {
-    fn eval_program(&self, prg: Program, env: &mut Environment) -> Option<Object> {
+    fn eval_program(&self, prg: Program, env: Rc<RefCell<Environment>>) -> Option<Object> {
         let mut out: Option<Object> = None;
         for stmt in prg.statements {
-            out = self.eval(Node::Statement(stmt), env);
+            out = self.eval(Node::Statement(stmt), env.clone());
             // No need to evaluate any more statements from a statements vector once we
             // get a return keyword. nothing after in the block matters.
             if let Some(out) = out.as_ref() {
@@ -107,11 +111,15 @@ impl TreeWalker {
         out
     }
 
-    fn eval_block_statement(&self, bs: BlockStatement, env: &mut Environment) -> Option<Object> {
+    fn eval_block_statement(
+        &self,
+        bs: BlockStatement,
+        env: Rc<RefCell<Environment>>,
+    ) -> Option<Object> {
         let mut out: Option<Object> = None;
 
         for stmt in bs.statements {
-            out = self.eval(Node::Statement(stmt), env);
+            out = self.eval(Node::Statement(stmt), env.clone());
 
             // TODO: Find a nicer way to do this. :(
             // The objective here is,
@@ -208,7 +216,8 @@ impl TreeWalker {
         }
     }
 
-    fn eval_identifier(&self, node: Identifier, env: &mut Environment) -> Option<Object> {
+    fn eval_identifier(&self, node: Identifier, env: Rc<RefCell<Environment>>) -> Option<Object> {
+        let env = env.borrow();
         env.get(&node.to_string()).or(Some(Object::Error(format!(
             "identifier not found: {}",
             node.to_string()
@@ -218,12 +227,12 @@ impl TreeWalker {
     fn eval_expression(
         &self,
         exprs: Vec<Expression>,
-        env: &mut Environment,
+        env: Rc<RefCell<Environment>>,
     ) -> Result<Vec<Object>, Object> {
         let mut out = vec![];
 
         for expr in exprs {
-            match self.eval(Node::Expression(expr), env) {
+            match self.eval(Node::Expression(expr), env.clone()) {
                 Some(v @ Object::Error(_)) => return Err(v),
                 Some(v) => out.push(v),
                 None => {
@@ -243,7 +252,6 @@ impl TreeWalker {
             }
             v => return Some(Object::Error(format!("not a function: {}", v.to_string()))),
         };
-        println!("{:?}", function.env);
 
         let mut enclosed_env = Environment::new_enclosed(function.env);
         for (i, parameter) in function.parameters.iter().enumerate() {
@@ -256,7 +264,7 @@ impl TreeWalker {
 
         let resp = self.eval(
             Node::Statement(Statement::BlockStatement(function.body)),
-            &mut enclosed_env,
+            Rc::new(RefCell::new(enclosed_env)),
         );
 
         // Unwrap return here to prevent it from bubbling up the stack

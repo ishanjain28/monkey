@@ -4,7 +4,11 @@ use {
         lexer::Lexer,
         parser::{ast::Node, Error as ParserError, Parser},
     },
-    std::io::{self, BufRead, Result as IoResult, Write},
+    std::{
+        cell::RefCell,
+        io::{self, BufRead, Result as IoResult, Write},
+        rc::Rc,
+    },
 };
 
 const PROMPT: &[u8] = b">> ";
@@ -19,7 +23,7 @@ pub fn init() {
 }
 
 fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
-    let mut environment = Environment::new();
+    let environment = Rc::new(RefCell::new(Environment::new()));
     loop {
         out.write_all(PROMPT).unwrap();
         out.flush().unwrap();
@@ -35,7 +39,7 @@ fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
         }
         let program = program.unwrap();
         let evaluator = TreeWalker::new();
-        let obj = evaluator.eval(Node::Program(program), &mut environment);
+        let obj = evaluator.eval(Node::Program(program), environment.clone());
         if let Some(node) = obj {
             out.write_fmt(format_args!("{}\n", node.inspect())).unwrap();
             out.flush().unwrap();

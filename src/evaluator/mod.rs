@@ -2,20 +2,22 @@ use {
     crate::parser::ast::{BlockStatement, Identifier, Node},
     itertools::Itertools,
     std::{
+        cell::RefCell,
         collections::HashMap,
         fmt::{Display, Formatter, Result as FmtResult, Write},
+        rc::Rc,
     },
 };
 pub mod tree_walker;
 
 pub trait Evaluator {
-    fn eval(&self, node: Node, env: &mut Environment) -> Option<Object>;
+    fn eval(&self, node: Node, env: Rc<RefCell<Environment>>) -> Option<Object>;
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Environment {
     store: HashMap<String, Object>,
-    outer: Option<Box<Environment>>,
+    outer: Option<Rc<RefCell<Environment>>>,
 }
 
 impl Environment {
@@ -29,7 +31,10 @@ impl Environment {
         match self.store.get(name) {
             Some(v) => Some(v.clone()),
             None => match &self.outer {
-                Some(outer) => outer.get(name),
+                Some(outer) => {
+                    let outer = outer.borrow();
+                    outer.get(name)
+                }
                 None => None,
             },
         }
@@ -38,10 +43,10 @@ impl Environment {
         self.store.insert(name, val);
     }
 
-    pub fn new_enclosed(env: Environment) -> Self {
+    pub fn new_enclosed(env: Rc<RefCell<Environment>>) -> Self {
         Self {
             store: HashMap::new(),
-            outer: Some(Box::new(env)),
+            outer: Some(env),
         }
     }
 }
@@ -101,12 +106,12 @@ impl Display for Object {
 pub struct Function {
     parameters: Vec<Identifier>,
     body: BlockStatement,
-    env: Environment,
+    env: Rc<RefCell<Environment>>,
 }
 
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
+    use std::{assert_matches::assert_matches, cell::RefCell, rc::Rc};
 
     use crate::{
         evaluator::{tree_walker::TreeWalker, Environment, Evaluator, Object, FALSE, NULL, TRUE},
@@ -122,8 +127,8 @@ mod tests {
             assert!(program.is_some());
             let program = program.unwrap();
             let evaluator = TreeWalker::new();
-            let mut env = Environment::new();
-            let eval = evaluator.eval(Node::Program(program), &mut env);
+            let env = Rc::new(RefCell::new(Environment::new()));
+            let eval = evaluator.eval(Node::Program(program), env);
             assert_eq!(eval, test.1);
         }
     }
@@ -305,8 +310,8 @@ mod tests {
         assert!(program.is_some());
         let program = program.unwrap();
         let evaluator = TreeWalker::new();
-        let mut env = Environment::new();
-        let eval = evaluator.eval(Node::Program(program), &mut env);
+        let env = Rc::new(RefCell::new(Environment::new()));
+        let eval = evaluator.eval(Node::Program(program), env);
         let node = eval.unwrap();
 
         assert_matches!(node, Object::Function(_));
@@ -364,6 +369,8 @@ mod tests {
 
     #[test]
     fn memory_test() {
+        // This test case allocates memory for `foobar=9999` over and over
+        // even though it is never used.
         let test_cases = [(
             "let counter = fn(x) {
                 if (x > 100 ) {
@@ -375,7 +382,7 @@ mod tests {
             };
             counter(0);
             ",
-            Some(Object::Integer(15)),
+            Some(Object::Boolean(true)),
         )];
 
         run_test_cases(&test_cases);
