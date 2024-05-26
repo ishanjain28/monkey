@@ -22,6 +22,7 @@ lazy_static! {
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum TokenType {
     Illegal,
+    #[allow(clippy::upper_case_acronyms)]
     EOF,
 
     // Identifiers and Literals
