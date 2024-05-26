@@ -467,6 +467,26 @@ mod tests {
                     "wrong number of arguments. got=2, want=1".to_string(),
                 )),
             ),
+            ("first([1,2,3,4])", Some(Object::Integer(1))),
+            ("last([1,2,3,4])", Some(Object::Integer(4))),
+            (
+                "rest([1,2,3,4])",
+                Some(Object::Array(Array {
+                    elements: vec![Object::Integer(2), Object::Integer(3), Object::Integer(4)],
+                })),
+            ),
+            (
+                "push([1,2,3,4])",
+                Some(Object::Error(
+                    "wrong number of arguments. got=1, want=2".to_string(),
+                )),
+            ),
+            (
+                "push([1],5)",
+                Some(Object::Array(Array {
+                    elements: vec![Object::Integer(1), Object::Integer(5)],
+                })),
+            ),
         ];
 
         run_test_cases(&test_cases);
