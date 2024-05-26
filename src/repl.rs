@@ -8,6 +8,8 @@ use {
         cell::RefCell,
         io::{self, BufRead, Result as IoResult, Write},
         rc::Rc,
+        sync::mpsc,
+        time::Duration,
     },
 };
 
@@ -23,10 +25,33 @@ pub fn init() {
 }
 
 fn start<R: BufRead, W: Write>(mut ip: R, mut out: W) {
+    out.write_all(b"Welcome to Monkey! Press Ctrl+C twice and enter to quit\n")
+        .unwrap();
+
+    let (send, recv) = mpsc::channel();
+
+    let mut should_quit = false;
+    ctrlc::set_handler(move || {
+        send.send(()).expect("error in sending signal to channel");
+    })
+    .expect("error in setting Ctrl+C handler");
+
     let environment = Rc::new(RefCell::new(Environment::new()));
     loop {
         out.write_all(PROMPT).unwrap();
         out.flush().unwrap();
+        if recv.recv_timeout(Duration::from_millis(5)).is_ok() {
+            if should_quit {
+                std::process::exit(0);
+            }
+            should_quit = true;
+            out.write_all(b"\r                                                          \r")
+                .unwrap();
+            continue;
+        } else {
+            should_quit = false;
+        }
+
         let mut s = String::new();
         ip.read_line(&mut s).unwrap();
 
