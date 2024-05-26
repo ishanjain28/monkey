@@ -4,7 +4,7 @@ use std::{cell::RefCell, rc::Rc};
 // It's just constantly unwrapping enums from one place and rewrapping it to some other enum(or even the same enum) and returning it
 // The error handling story is pretty bad too
 use crate::{
-    evaluator::{Evaluator, Object, FALSE, NULL, TRUE},
+    evaluator::{Evaluator, Object},
     lexer::TokenType,
     parser::ast::{
         BlockStatement, Expression, ExpressionStatement, Identifier, LetStatement, Node, Program,
@@ -12,7 +12,7 @@ use crate::{
     },
 };
 
-use super::{Environment, Function};
+use super::{builtins::BUILTINS, Environment, Function};
 
 pub struct TreeWalker;
 
@@ -84,7 +84,7 @@ impl Evaluator for TreeWalker {
                     } else if let Some(alternative) = ie.alternative {
                         self.eval(Node::Statement(Statement::BlockStatement(alternative)), env)
                     } else {
-                        Some(NULL)
+                        Some(Object::Null)
                     }
                 }
             },
@@ -195,10 +195,10 @@ impl TreeWalker {
 
     fn eval_bang_operator_expression(&self, expr: Object) -> Object {
         match expr {
-            TRUE => FALSE,
-            FALSE => TRUE,
-            NULL => TRUE,
-            _ => FALSE,
+            Object::Boolean(true) => Object::Boolean(false),
+            Object::Boolean(false) => Object::Boolean(true),
+            Object::Null => Object::Boolean(true),
+            _ => Object::Boolean(false),
         }
     }
 
@@ -211,19 +211,25 @@ impl TreeWalker {
 
     fn is_truthy(&self, obj: &Object) -> bool {
         match *obj {
-            NULL => false,
-            TRUE => true,
-            FALSE => false,
+            Object::Null => false,
+            Object::Boolean(true) => true,
+            Object::Boolean(false) => false,
             _ => true,
         }
     }
 
     fn eval_identifier(&self, node: Identifier, env: Rc<RefCell<Environment>>) -> Option<Object> {
         let env = env.borrow();
-        env.get(&node.to_string()).or(Some(Object::Error(format!(
-            "identifier not found: {}",
-            node.to_string()
-        ))))
+
+        if let Some(v) = env.get(&node.to_string()) {
+            return Some(v.clone());
+        }
+
+        if let Some(v) = BUILTINS.get(&node.to_string().as_str()) {
+            return Some(v.clone());
+        }
+
+        Some(Object::Error(format!("identifier not found: {}", node)))
     }
 
     fn eval_expression(
@@ -247,18 +253,22 @@ impl TreeWalker {
     }
 
     fn apply_function(&self, function: Object, args: Vec<Object>) -> Option<Object> {
+        if let Object::Builtin(ref func) = function {
+            return Some((func.func)(args));
+        }
+
         let function = match function {
             Object::Function(f) => f,
             Object::Error(e) => {
-                return Some(Object::Error(format!("not a function: {}", e.to_string())));
+                return Some(Object::Error(format!("not a function: {}", e)));
             }
-            v => return Some(Object::Error(format!("not a function: {}", v.to_string()))),
+            v => return Some(Object::Error(format!("not a function: {}", v))),
         };
 
         let mut enclosed_env = Environment::new_enclosed(function.env);
         for (i, parameter) in function.parameters.iter().enumerate() {
             if args.len() <= i {
-                return Some(Object::Error(format!("incorrect number of arguments")));
+                return Some(Object::Error("incorrect number of arguments".to_owned()));
             }
 
             enclosed_env.set(parameter.value.clone(), args[i].clone());

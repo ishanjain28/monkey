@@ -4,10 +4,11 @@ use {
     std::{
         cell::RefCell,
         collections::HashMap,
-        fmt::{Display, Formatter, Result as FmtResult, Write},
+        fmt::{self, Display, Formatter, Result as FmtResult, Write},
         rc::Rc,
     },
 };
+pub mod builtins;
 pub mod tree_walker;
 
 pub trait Evaluator {
@@ -59,12 +60,9 @@ pub enum Object {
     ReturnValue(Box<Object>),
     Error(String),
     Function(Function),
+    Builtin(BuiltinFunction),
     Null,
 }
-
-const NULL: Object = Object::Null;
-const TRUE: Object = Object::Boolean(true);
-const FALSE: Object = Object::Boolean(false);
 
 impl Object {
     pub fn inspect(&self) -> String {
@@ -75,6 +73,7 @@ impl Object {
             Object::ReturnValue(ret) => ret.inspect(),
             Object::Error(s) => s.to_string(),
             Object::Null => "NULL".into(),
+            Object::Builtin(_) => "builtin function".to_string(),
             Object::Function(s) => {
                 let mut out = String::new();
 
@@ -101,6 +100,7 @@ impl Display for Object {
             Object::Error(_) => "ERROR",
             Object::Function(_) => "FUNCTION",
             Object::Null => "NULL",
+            Object::Builtin(_) => "BUILTIN",
         })
     }
 }
@@ -112,15 +112,39 @@ pub struct Function {
     env: Rc<RefCell<Environment>>,
 }
 
+type Builtin = fn(Vec<Object>) -> Object;
+
+#[derive(Clone)]
+pub struct BuiltinFunction {
+    func: Box<Builtin>,
+}
+
+impl fmt::Debug for BuiltinFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.debug_struct("BuiltinFunction")
+            .field("func", &"builtin")
+            .finish()
+    }
+}
+
+impl PartialEq for BuiltinFunction {
+    fn eq(&self, _: &Self) -> bool {
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{assert_matches::assert_matches, cell::RefCell, rc::Rc};
 
     use crate::{
-        evaluator::{tree_walker::TreeWalker, Environment, Evaluator, Object, FALSE, NULL, TRUE},
+        evaluator::{tree_walker::TreeWalker, Environment, Evaluator, Object},
         lexer::Lexer,
         parser::{ast::Node, Parser},
     };
+    const TRUE: Object = Object::Boolean(true);
+    const FALSE: Object = Object::Boolean(false);
+    const NULL: Object = Object::Null;
 
     fn run_test_cases(test_cases: &[(&str, Option<Object>)]) {
         for test in test_cases.iter() {
@@ -408,6 +432,31 @@ mod tests {
             ",
             Some(Object::Boolean(true)),
         )];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn builtin_function() {
+        // This test case allocates memory for `foobar=9999` over and over
+        // even though it is never used.
+        let test_cases = [
+            ("len(\"\")", Some(Object::Integer(0))),
+            ("len(\"four\")", Some(Object::Integer(4))),
+            ("len(\"hello world\")", Some(Object::Integer(11))),
+            (
+                "len(1)",
+                Some(Object::Error(
+                    "argument to `len` not supported, got INTEGER".to_string(),
+                )),
+            ),
+            (
+                "len(\"one\", \"two\")",
+                Some(Object::Error(
+                    "wrong number of arguments. got=2, want=1".to_string(),
+                )),
+            ),
+        ];
 
         run_test_cases(&test_cases);
     }
