@@ -58,6 +58,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(TokenType::LParen, Expression::parse_grouped_expression);
         parser.register_prefix(TokenType::If, IfExpression::parse);
         parser.register_prefix(TokenType::Function, FunctionLiteral::parse);
+        parser.register_prefix(TokenType::LBracket, ArrayLiteral::parse);
 
         // Neat trick!
         // Call expressions looks like <ident>(<args>).
@@ -145,6 +146,37 @@ impl<'a> Parser<'a> {
             Some(p) => *p,
             None => ExpressionPriority::Lowest,
         }
+    }
+
+    fn parse_expression_list(&mut self, end_token: TokenType) -> Option<Vec<Expression>> {
+        let mut out = vec![];
+
+        if self.peek_token_is(end_token) {
+            self.lexer.next();
+            return Some(out);
+        }
+
+        let next_token = self.lexer.next()?;
+        out.push(Expression::parse(
+            self,
+            next_token,
+            ExpressionPriority::Lowest,
+        )?);
+
+        while self.peek_token_is(TokenType::Comma) {
+            self.lexer.next();
+            let next_token = self.lexer.next()?;
+
+            out.push(Expression::parse(
+                self,
+                next_token,
+                ExpressionPriority::Lowest,
+            )?);
+        }
+
+        self.expect_peek(end_token)?;
+
+        Some(out)
     }
 }
 
@@ -891,5 +923,30 @@ mod tests {
             assert!(program.is_some());
             assert_eq!(program.unwrap().to_string(), test.1);
         }
+    }
+
+    #[test]
+    fn array_literals() {
+        let test_cases = [(
+            "[1, 2 * 2, 3 + 3]",
+            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                token!(TokenType::LBracket),
+                Expression::ArrayLiteral(ArrayLiteral::new(vec![
+                    Expression::IntegerLiteral(IntegerLiteral::new(1)),
+                    Expression::InfixExpression(InfixExpression::new(
+                        Expression::IntegerLiteral(IntegerLiteral::new(2)),
+                        TokenType::Asterisk,
+                        Expression::IntegerLiteral(IntegerLiteral::new(2)),
+                    )),
+                    Expression::InfixExpression(InfixExpression::new(
+                        Expression::IntegerLiteral(IntegerLiteral::new(3)),
+                        TokenType::Plus,
+                        Expression::IntegerLiteral(IntegerLiteral::new(3)),
+                    )),
+                ])),
+            ))],
+        )];
+
+        check_test_cases(&test_cases);
     }
 }

@@ -51,6 +51,8 @@ pub enum TokenType {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
 
     // Keywords
     Function,
@@ -81,6 +83,8 @@ impl Display for TokenType {
             TokenType::RParen => ")",
             TokenType::LBrace => "{",
             TokenType::RBrace => "}",
+            TokenType::LBracket => "[",
+            TokenType::RBracket => "]",
             TokenType::Function => "fn",
             TokenType::If => "if",
             TokenType::Else => "else",
@@ -241,6 +245,8 @@ impl<'a> Iterator for Lexer<'a> {
             Some(';') => Some(token!(TokenType::Semicolon)),
             Some('(') => Some(token!(TokenType::LParen)),
             Some(')') => Some(token!(TokenType::RParen)),
+            Some('[') => Some(token!(TokenType::LBracket)),
+            Some(']') => Some(token!(TokenType::RBracket)),
             Some('{') => Some(token!(TokenType::LBrace)),
             Some('}') => Some(token!(TokenType::RBrace)),
             Some('!') => {
@@ -379,6 +385,7 @@ mod tests {
 
                 \"foobar\"
                 \"foo bar\"
+                [1,2];
 
                 "
             )
@@ -433,6 +440,12 @@ mod tests {
                 token!(TokenType::Semicolon),
                 token!(TokenType::String, "foobar"),
                 token!(TokenType::String, "foo bar"),
+                token!(TokenType::LBracket),
+                token!(TokenType::Int, "1"),
+                token!(TokenType::Comma),
+                token!(TokenType::Int, "2"),
+                token!(TokenType::RBracket),
+                token!(TokenType::Semicolon),
                 token!(TokenType::EOF),
             ],
         );

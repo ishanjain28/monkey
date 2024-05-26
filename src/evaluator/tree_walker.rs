@@ -47,6 +47,7 @@ impl Evaluator for TreeWalker {
                 Expression::Identifier(v) => self.eval_identifier(v, env),
                 Expression::IntegerLiteral(il) => Some(Object::Integer(il.value)),
                 Expression::StringLiteral(s) => Some(Object::String(s.value)),
+                Expression::ArrayLiteral(v) => unimplemented!(),
                 Expression::BooleanExpression(b) => Some(Object::Boolean(b.value)),
                 Expression::PrefixExpression(p) => {
                     let expr = self.eval(Node::Expression(*p.right), env)?;

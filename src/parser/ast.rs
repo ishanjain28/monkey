@@ -7,7 +7,7 @@ use {
     std::{
         cmp::PartialOrd,
         convert::From,
-        fmt::{Display, Formatter, Result as FmtResult},
+        fmt::{Display, Formatter, Result as FmtResult, Write},
     },
 };
 
@@ -189,6 +189,7 @@ pub enum Expression {
     Identifier(Identifier),
     IntegerLiteral(IntegerLiteral),
     StringLiteral(StringLiteral),
+    ArrayLiteral(ArrayLiteral),
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
     BooleanExpression(BooleanExpression),
@@ -198,7 +199,11 @@ pub enum Expression {
 }
 
 impl Expression {
-    fn parse(parser: &mut Parser, ctoken: Token, precedence: ExpressionPriority) -> Option<Self> {
+    pub fn parse(
+        parser: &mut Parser,
+        ctoken: Token,
+        precedence: ExpressionPriority,
+    ) -> Option<Self> {
         match parser.prefix_parse_fns.get(&ctoken.name) {
             Some(prefix) => {
                 let mut left_expr = prefix(parser, ctoken);
@@ -244,6 +249,7 @@ impl Display for Expression {
             Expression::Identifier(v) => v.to_string(),
             Expression::IntegerLiteral(v) => v.value.to_string(),
             Expression::StringLiteral(v) => v.value.to_string(),
+            Expression::ArrayLiteral(v) => v.to_string(),
             Expression::PrefixExpression(v) => v.to_string(),
             Expression::InfixExpression(v) => v.to_string(),
             Expression::BooleanExpression(v) => v.to_string(),
@@ -330,6 +336,33 @@ impl StringLiteral {
         Some(Expression::StringLiteral(StringLiteral::new(
             &token.literal?,
         )))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ArrayLiteral {
+    elements: Vec<Expression>,
+}
+
+impl ArrayLiteral {
+    pub fn new(expr: Vec<Expression>) -> Self {
+        Self { elements: expr }
+    }
+    pub fn parse(parser: &mut Parser, _token: Token) -> Option<Expression> {
+        let mut out = ArrayLiteral { elements: vec![] };
+
+        out.elements = parser.parse_expression_list(TokenType::RBracket)?;
+
+        Some(Expression::ArrayLiteral(out))
+    }
+}
+
+impl Display for ArrayLiteral {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.write_char('[').unwrap();
+        f.write_str(&self.elements.iter().map(|x| x.to_string()).join(", "))
+            .unwrap();
+        f.write_char(']')
     }
 }
 
@@ -591,48 +624,13 @@ impl CallExpression {
         }
     }
 
-    pub fn parse(parser: &mut Parser, ctoken: Token, expr: Expression) -> Option<Expression> {
-        let args = Self::parse_call_arguments(parser, ctoken);
+    pub fn parse(parser: &mut Parser, _ctoken: Token, expr: Expression) -> Option<Expression> {
+        let args = parser.parse_expression_list(TokenType::RParen)?;
 
         Some(Expression::CallExpression(Self {
             function: Box::new(expr),
-            arguments: args?,
+            arguments: args,
         }))
-    }
-
-    fn parse_call_arguments(parser: &mut Parser, _ctoken: Token) -> Option<Vec<Expression>> {
-        let mut expressions = vec![];
-        if let Some(token) = parser.lexer.peek() {
-            if token.name == TokenType::RParen {
-                parser.lexer.next();
-                return Some(expressions);
-            }
-        }
-        let ntoken = match parser.lexer.next() {
-            Some(token) => token,
-            None => return Some(expressions),
-        };
-
-        if let Some(expr) = Expression::parse(parser, ntoken, ExpressionPriority::Lowest) {
-            expressions.push(expr);
-        } else {
-            return Some(expressions);
-        }
-        while parser.peek_token_is(TokenType::Comma) {
-            parser.lexer.next();
-            let token = match parser.lexer.next() {
-                Some(v) => v,
-                None => return Some(expressions),
-            };
-            if let Some(expr) = Expression::parse(parser, token, ExpressionPriority::Lowest) {
-                expressions.push(expr);
-            } else {
-                return Some(expressions);
-            }
-        }
-        parser.expect_peek(TokenType::RParen)?;
-
-        Some(expressions)
     }
 }
 
