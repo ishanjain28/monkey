@@ -61,6 +61,7 @@ pub enum Object {
     Error(String),
     Function(Function),
     Builtin(BuiltinFunction),
+    Array(Array),
     Null,
 }
 
@@ -74,6 +75,9 @@ impl Object {
             Object::Error(s) => s.to_string(),
             Object::Null => "NULL".into(),
             Object::Builtin(_) => "builtin function".to_string(),
+            Object::Array(v) => {
+                format!("[{}]", v.elements.iter().map(|x| x.to_string()).join(", "))
+            }
             Object::Function(s) => {
                 let mut out = String::new();
 
@@ -101,6 +105,7 @@ impl Display for Object {
             Object::Function(_) => "FUNCTION",
             Object::Null => "NULL",
             Object::Builtin(_) => "BUILTIN",
+            Object::Array(_) => "ARRAY",
         })
     }
 }
@@ -133,6 +138,11 @@ impl PartialEq for BuiltinFunction {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Array {
+    elements: Vec<Object>,
+}
+
 #[cfg(test)]
 mod tests {
     use std::{assert_matches::assert_matches, cell::RefCell, rc::Rc};
@@ -142,6 +152,8 @@ mod tests {
         lexer::Lexer,
         parser::{ast::Node, Parser},
     };
+
+    use super::Array;
     const TRUE: Object = Object::Boolean(true);
     const FALSE: Object = Object::Boolean(false);
     const NULL: Object = Object::Null;
@@ -438,12 +450,11 @@ mod tests {
 
     #[test]
     fn builtin_function() {
-        // This test case allocates memory for `foobar=9999` over and over
-        // even though it is never used.
         let test_cases = [
             ("len(\"\")", Some(Object::Integer(0))),
             ("len(\"four\")", Some(Object::Integer(4))),
             ("len(\"hello world\")", Some(Object::Integer(11))),
+            ("len([1,2,3,4])", Some(Object::Integer(4))),
             (
                 "len(1)",
                 Some(Object::Error(
@@ -456,6 +467,42 @@ mod tests {
                     "wrong number of arguments. got=2, want=1".to_string(),
                 )),
             ),
+        ];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn array_literals() {
+        let test_cases = [(
+            "[1, 2* 2, 3+3]",
+            Some(Object::Array(Array {
+                elements: vec![Object::Integer(1), Object::Integer(4), Object::Integer(6)],
+            })),
+        )];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn array_index_expressions() {
+        let test_cases = [
+            ("[1, 2, 3][0]", Some(Object::Integer(1))),
+            ("[1, 2, 3][1]", Some(Object::Integer(2))),
+            ("[1, 2, 3][2]", Some(Object::Integer(3))),
+            ("let i = 0; [1][i];", Some(Object::Integer(1))),
+            ("[1,2,3][1+1]", Some(Object::Integer(3))),
+            ("let array = [1,2,3]; array[2];", Some(Object::Integer(3))),
+            (
+                "let array = [1,2,3]; array[0]+array[1]+array[2];",
+                Some(Object::Integer(6)),
+            ),
+            (
+                "let array = [1,2,3]; let i = array[0]; array[i];",
+                Some(Object::Integer(2)),
+            ),
+            ("[1,2,3][3];", Some(Object::Null)),
+            ("[1,2,3][-1];", Some(Object::Null)),
         ];
 
         run_test_cases(&test_cases);

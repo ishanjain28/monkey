@@ -18,6 +18,7 @@ pub const BUILTINS: LazyCell<HashMap<&'static str, Object>> = LazyCell::new(|| {
 
                 match &args[0] {
                     Object::String(s) => Object::Integer(s.len() as i64),
+                    Object::Array(s) => Object::Integer(s.elements.len() as i64),
                     v => Object::Error(format!("argument to `len` not supported, got {}", v)),
                 }
             }),

@@ -28,6 +28,7 @@ lazy_static! {
         m.insert(TokenType::Slash, ExpressionPriority::Product);
         m.insert(TokenType::Asterisk, ExpressionPriority::Product);
         m.insert(TokenType::LParen, ExpressionPriority::Call);
+        m.insert(TokenType::LBracket, ExpressionPriority::Index);
         m
     };
 }
@@ -72,6 +73,8 @@ impl<'a> Parser<'a> {
         parser.register_infix(TokenType::NotEquals, InfixExpression::parse);
         parser.register_infix(TokenType::LessThan, InfixExpression::parse);
         parser.register_infix(TokenType::GreaterThan, InfixExpression::parse);
+        parser.register_infix(TokenType::LBracket, IndexExpression::parse);
+
         parser
     }
 
@@ -548,6 +551,14 @@ mod tests {
             ("2 / (5 + 5)", "(2 / (5 + 5))"),
             ("-(5 + 5)", "(-(5 + 5))"),
             ("!(true == true)", "(!(true == true))"),
+            (
+                "a * [1, 2, 3, 4][b * c] * d",
+                "((a * ([1, 2, 3, 4][(b * c)])) * d)",
+            ),
+            (
+                "add(a * b[2], b[1], 2 * [1, 2][1])",
+                "add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
+            ),
         ];
 
         for test in test_cases.iter() {
@@ -944,6 +955,26 @@ mod tests {
                         Expression::IntegerLiteral(IntegerLiteral::new(3)),
                     )),
                 ])),
+            ))],
+        )];
+
+        check_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn index_expression() {
+        let test_cases = [(
+            "myArray[ 1 + 1 ]",
+            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                token!(TokenType::Ident, "myArray"),
+                Expression::IndexExpression(IndexExpression::new(
+                    Expression::Identifier(Identifier::new(TokenType::Ident, "myArray")),
+                    Expression::InfixExpression(InfixExpression::new(
+                        Expression::IntegerLiteral(IntegerLiteral::new(1)),
+                        TokenType::Plus,
+                        Expression::IntegerLiteral(IntegerLiteral::new(1)),
+                    )),
+                )),
             ))],
         )];
 

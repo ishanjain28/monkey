@@ -182,6 +182,7 @@ pub enum ExpressionPriority {
     Product = 4,
     Prefix = 5,
     Call = 6,
+    Index = 7,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -190,6 +191,7 @@ pub enum Expression {
     IntegerLiteral(IntegerLiteral),
     StringLiteral(StringLiteral),
     ArrayLiteral(ArrayLiteral),
+    IndexExpression(IndexExpression),
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
     BooleanExpression(BooleanExpression),
@@ -256,6 +258,9 @@ impl Display for Expression {
             Expression::IfExpression(v) => v.to_string(),
             Expression::FunctionExpression(v) => v.to_string(),
             Expression::CallExpression(v) => v.to_string(),
+            Expression::IndexExpression(v) => {
+                format!("({}[{}])", v.left, v.index)
+            }
         };
 
         f.write_str(&value)
@@ -341,7 +346,7 @@ impl StringLiteral {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ArrayLiteral {
-    elements: Vec<Expression>,
+    pub elements: Vec<Expression>,
 }
 
 impl ArrayLiteral {
@@ -363,6 +368,34 @@ impl Display for ArrayLiteral {
         f.write_str(&self.elements.iter().map(|x| x.to_string()).join(", "))
             .unwrap();
         f.write_char(']')
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct IndexExpression {
+    pub left: Box<Expression>,
+    pub index: Box<Expression>,
+}
+
+impl IndexExpression {
+    pub fn new(left: Expression, index: Expression) -> Self {
+        Self {
+            left: Box::new(left),
+            index: Box::new(index),
+        }
+    }
+
+    pub fn parse(parser: &mut Parser, _token: Token, left: Expression) -> Option<Expression> {
+        let next_token = parser.lexer.next()?;
+
+        let index = Expression::parse(parser, next_token, ExpressionPriority::Lowest)?;
+
+        parser.expect_peek(TokenType::RBracket)?;
+
+        Some(Expression::IndexExpression(IndexExpression {
+            left: Box::new(left),
+            index: Box::new(index),
+        }))
     }
 }
 

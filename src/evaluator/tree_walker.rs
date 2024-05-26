@@ -4,7 +4,7 @@ use std::{cell::RefCell, rc::Rc};
 // It's just constantly unwrapping enums from one place and rewrapping it to some other enum(or even the same enum) and returning it
 // The error handling story is pretty bad too
 use crate::{
-    evaluator::{Evaluator, Object},
+    evaluator::{Array, Evaluator, Object},
     lexer::TokenType,
     parser::ast::{
         BlockStatement, Expression, ExpressionStatement, Identifier, LetStatement, Node, Program,
@@ -47,7 +47,22 @@ impl Evaluator for TreeWalker {
                 Expression::Identifier(v) => self.eval_identifier(v, env),
                 Expression::IntegerLiteral(il) => Some(Object::Integer(il.value)),
                 Expression::StringLiteral(s) => Some(Object::String(s.value)),
-                Expression::ArrayLiteral(v) => unimplemented!(),
+                Expression::ArrayLiteral(v) => {
+                    println!("{:?}", v);
+
+                    let args = match self.eval_expression(v.elements, env) {
+                        Ok(v) => v,
+                        Err(e) => return Some(e),
+                    };
+
+                    Some(Object::Array(Array { elements: args }))
+                }
+                Expression::IndexExpression(v) => {
+                    let left = self.eval(Node::Expression(*v.left), env.clone())?;
+                    let index = self.eval(Node::Expression(*v.index), env)?;
+
+                    self.eval_index_expression(left, index)
+                }
                 Expression::BooleanExpression(b) => Some(Object::Boolean(b.value)),
                 Expression::PrefixExpression(p) => {
                     let expr = self.eval(Node::Expression(*p.right), env)?;
@@ -287,5 +302,24 @@ impl TreeWalker {
         }
 
         resp
+    }
+
+    fn eval_index_expression(&self, left: Object, index: Object) -> Option<Object> {
+        match (&left, index) {
+            (Object::Array(a), Object::Integer(i)) => Some(Self::eval_array_index_expression(a, i)),
+
+            _ => Some(Object::Error(format!(
+                "index operator not supported: {}",
+                left
+            ))),
+        }
+    }
+
+    fn eval_array_index_expression(array: &Array, index: i64) -> Object {
+        let max = array.elements.len() as i64;
+        if index < 0 || index >= max {
+            return Object::Null;
+        }
+        array.elements[index as usize].clone()
     }
 }
