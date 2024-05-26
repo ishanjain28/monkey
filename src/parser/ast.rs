@@ -102,7 +102,7 @@ impl LetStatement {
 
 impl Display for LetStatement {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        let mut out = format!("{} {} = ", TokenType::Let.to_string(), self.name.value);
+        let mut out = format!("{} {} = ", TokenType::Let, self.name.value);
 
         if let Some(v) = &self.value {
             let a: String = v.into();
@@ -188,6 +188,7 @@ pub enum ExpressionPriority {
 pub enum Expression {
     Identifier(Identifier),
     IntegerLiteral(IntegerLiteral),
+    StringLiteral(StringLiteral),
     PrefixExpression(PrefixExpression),
     InfixExpression(InfixExpression),
     BooleanExpression(BooleanExpression),
@@ -242,6 +243,7 @@ impl Display for Expression {
         let value = match self {
             Expression::Identifier(v) => v.to_string(),
             Expression::IntegerLiteral(v) => v.value.to_string(),
+            Expression::StringLiteral(v) => v.value.to_string(),
             Expression::PrefixExpression(v) => v.to_string(),
             Expression::InfixExpression(v) => v.to_string(),
             Expression::BooleanExpression(v) => v.to_string(),
@@ -314,6 +316,24 @@ impl IntegerLiteral {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
+pub struct StringLiteral {
+    pub value: String,
+}
+
+impl StringLiteral {
+    pub fn new(v: &str) -> Self {
+        Self {
+            value: v.to_string(),
+        }
+    }
+    pub fn parse(_parser: &mut Parser, token: Token) -> Option<Expression> {
+        Some(Expression::StringLiteral(StringLiteral::new(
+            &token.literal?,
+        )))
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PrefixExpression {
     pub operator: TokenType,
     pub right: Box<Expression>,
@@ -339,11 +359,7 @@ impl PrefixExpression {
 
 impl Display for PrefixExpression {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        f.write_fmt(format_args!(
-            "({}{})",
-            self.operator,
-            self.right.to_string()
-        ))
+        f.write_fmt(format_args!("({}{})", self.operator, self.right))
     }
 }
 
@@ -376,9 +392,7 @@ impl Display for InfixExpression {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         f.write_fmt(format_args!(
             "({} {} {})",
-            self.left.to_string(),
-            self.operator,
-            self.right.to_string(),
+            self.left, self.operator, self.right,
         ))
     }
 }
@@ -449,13 +463,9 @@ impl IfExpression {
 
 impl Display for IfExpression {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        let mut out = format!(
-            "if {} {{ {} }}",
-            self.condition.to_string(),
-            self.consequence.to_string()
-        );
+        let mut out = format!("if {} {{ {} }}", self.condition, self.consequence);
         if let Some(alternative) = &self.alternative {
-            out += &format!(" else {{ {} }}", alternative.to_string());
+            out += &format!(" else {{ {} }}", alternative);
         }
         f.write_str(&out)
     }

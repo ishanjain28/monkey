@@ -48,6 +48,7 @@ impl<'a> Parser<'a> {
             infix_parse_fns: HashMap::new(),
         };
 
+        parser.register_prefix(TokenType::String, StringLiteral::parse);
         parser.register_prefix(TokenType::Ident, Identifier::parse);
         parser.register_prefix(TokenType::Int, IntegerLiteral::parse);
         parser.register_prefix(TokenType::Bang, PrefixExpression::parse);
@@ -101,10 +102,7 @@ impl<'a> Parser<'a> {
         if self.peek_token_is(token) {
             self.lexer.next()
         } else {
-            let got_token = match self.lexer.peek() {
-                Some(v) => Some(v.name),
-                None => None,
-            };
+            let got_token = self.lexer.peek().map(|v| v.name);
             self.peek_error(token, got_token);
             None
         }
@@ -113,10 +111,7 @@ impl<'a> Parser<'a> {
     fn peek_error(&mut self, et: TokenType, gt: Option<TokenType>) {
         let msg = match gt {
             Some(v) => format!("expected next token to be {:?}, Got {:?} instead", et, v),
-            None => format!(
-                "expected next token to be {}, Got None instead",
-                et.to_string()
-            ),
+            None => format!("expected next token to be {}, Got None instead", et),
         };
         self.errors.push(Error { reason: msg });
     }
@@ -131,7 +126,7 @@ impl<'a> Parser<'a> {
 
     fn no_prefix_parse_fn_error(&mut self, token: TokenType) {
         self.errors.push(Error {
-            reason: format!("no prefix parse function for {} found", token.to_string()),
+            reason: format!("no prefix parse function for {} found", token),
         });
     }
 
@@ -284,6 +279,24 @@ mod tests {
             vec![Statement::ExpressionStatement(ExpressionStatement::new(
                 token!(TokenType::Int, "5"),
                 Expression::IntegerLiteral(IntegerLiteral::new(5))
+            ))]
+        );
+    }
+
+    #[test]
+    fn string_literal_expression() {
+        let lexer = Lexer::new("\"hello world\";");
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program();
+        check_parser_errors(&parser);
+        assert_eq!(parser.errors.len(), 0);
+        assert!(program.is_some());
+
+        assert_eq!(
+            program.unwrap().statements,
+            vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                token!(TokenType::String, "hello world"),
+                Expression::StringLiteral(StringLiteral::new("hello world"))
             ))]
         );
     }

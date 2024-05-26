@@ -46,6 +46,7 @@ impl Evaluator for TreeWalker {
             Node::Expression(expr) => match expr {
                 Expression::Identifier(v) => self.eval_identifier(v, env),
                 Expression::IntegerLiteral(il) => Some(Object::Integer(il.value)),
+                Expression::StringLiteral(s) => Some(Object::String(s.value)),
                 Expression::BooleanExpression(b) => Some(Object::Boolean(b.value)),
                 Expression::PrefixExpression(p) => {
                     let expr = self.eval(Node::Expression(*p.right), env)?;
@@ -56,13 +57,11 @@ impl Evaluator for TreeWalker {
                     let right = self.eval(Node::Expression(*ie.right), env)?;
                     self.eval_infix_expression(left, ie.operator, right)
                 }
-                Expression::FunctionExpression(fnl) => {
-                    return Some(Object::Function(Function {
-                        body: fnl.body,
-                        parameters: fnl.parameters,
-                        env: env,
-                    }));
-                }
+                Expression::FunctionExpression(fnl) => Some(Object::Function(Function {
+                    body: fnl.body,
+                    parameters: fnl.parameters,
+                    env,
+                })),
                 Expression::CallExpression(v) => {
                     let function = self.eval(Node::Expression(*v.function), env.clone())?;
                     // Resolve function arguments and update the environment
@@ -179,6 +178,9 @@ impl TreeWalker {
                 TokenType::LessThan => Object::Boolean(l < r),
                 _ => Object::Error(format!("unknown operator: {} {} {}", l, operator, r)),
             },
+            (Object::String(l), Object::String(r)) if operator == TokenType::Plus => {
+                Object::String(l.to_owned() + &r)
+            }
             (o1, o2) if o1.to_string() != o2.to_string() => {
                 Object::Error(format!("type mismatch: {} {} {}", o1, operator, o2))
             }

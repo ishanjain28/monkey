@@ -54,6 +54,7 @@ impl Environment {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Object {
     Integer(i64),
+    String(String),
     Boolean(bool),
     ReturnValue(Box<Object>),
     Error(String),
@@ -69,6 +70,7 @@ impl Object {
     pub fn inspect(&self) -> String {
         match self {
             Object::Integer(v) => v.to_string(),
+            Object::String(s) => s.to_string(),
             Object::Boolean(v) => v.to_string(),
             Object::ReturnValue(ret) => ret.inspect(),
             Object::Error(s) => s.to_string(),
@@ -79,7 +81,7 @@ impl Object {
                 out.write_fmt(format_args!(
                     "fn({}) {{ {} }}",
                     s.parameters.iter().map(|x| x.to_string()).join(", "),
-                    s.body.to_string()
+                    s.body
                 ))
                 .unwrap();
 
@@ -93,6 +95,7 @@ impl Display for Object {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
         f.write_str(match self {
             Object::Integer(_) => "INTEGER",
+            Object::String(_) => "STRING",
             Object::Boolean(_) => "BOOLEAN",
             Object::ReturnValue(_) => "RETURN_VALUE",
             Object::Error(_) => "ERROR",
@@ -196,6 +199,23 @@ mod tests {
     }
 
     #[test]
+    fn eval_string_literal_expression() {
+        let test_cases = [("\"Hello \"", Some(Object::String("Hello ".to_owned())))];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn eval_string_concatenation() {
+        let test_cases = [(
+            "\"Hello \" + \"World\"",
+            Some(Object::String("Hello World".to_owned())),
+        )];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
     fn eval_if_else_expression() {
         let test_cases = [
             // (
@@ -280,6 +300,10 @@ mod tests {
                 "foobar",
                 Some(Object::Error("identifier not found: foobar".into())),
             ),
+            (
+                "\"Hello\" - \"World\"",
+                Some(Object::Error("unknown operator: STRING - STRING".into())),
+            ),
         ];
 
         run_test_cases(&test_cases);
@@ -304,7 +328,7 @@ mod tests {
     fn test_function_object() {
         let test_case = "fn(x) { x + 2;};";
 
-        let lexer = Lexer::new(&test_case);
+        let lexer = Lexer::new(test_case);
         let mut parser = Parser::new(lexer);
         let program = parser.parse_program();
         assert!(program.is_some());
@@ -373,7 +397,7 @@ mod tests {
         // even though it is never used.
         let test_cases = [(
             "let counter = fn(x) {
-                if (x > 100 ) {
+                if (x > 30 ) {
                     return true;
                 } else {
                     let foobar = 9999;

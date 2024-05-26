@@ -31,6 +31,7 @@ pub enum TokenType {
     // by other variants of this enum.
     Ident,
     Int,
+    String,
     // Operators
     Assign,
     Plus,
@@ -91,6 +92,7 @@ impl Display for TokenType {
             TokenType::Illegal => "illegal",
             TokenType::Ident => "ident",
             TokenType::Int => "int",
+            TokenType::String => "string",
         })
     }
 }
@@ -199,6 +201,19 @@ impl<'a> Lexer<'a> {
         }
         number.into_iter().collect()
     }
+
+    fn read_string(&mut self) -> String {
+        let mut out = String::new();
+
+        while let Some(c) = self.read_char() {
+            if c == '"' {
+                break;
+            }
+            out.push(c);
+        }
+
+        out
+    }
 }
 
 impl<'a> Iterator for Lexer<'a> {
@@ -210,10 +225,7 @@ impl<'a> Iterator for Lexer<'a> {
 
         match ch {
             Some('=') => {
-                let is_e = match self.input.peek() {
-                    Some(v) if *v == '=' => true,
-                    _ => false,
-                };
+                let is_e = matches!(self.input.peek(), Some(v) if *v == '=');
                 if is_e {
                     self.read_char();
                     Some(token!(TokenType::Equals))
@@ -232,10 +244,7 @@ impl<'a> Iterator for Lexer<'a> {
             Some('{') => Some(token!(TokenType::LBrace)),
             Some('}') => Some(token!(TokenType::RBrace)),
             Some('!') => {
-                let is_ne = match self.input.peek() {
-                    Some(v) if *v == '=' => true,
-                    _ => false,
-                };
+                let is_ne = matches!(self.input.peek(), Some(v) if *v == '=');
                 if is_ne {
                     self.read_char();
                     Some(token!(TokenType::NotEquals))
@@ -245,6 +254,10 @@ impl<'a> Iterator for Lexer<'a> {
             }
             Some('>') => Some(token!(TokenType::GreaterThan)),
             Some('<') => Some(token!(TokenType::LessThan)),
+            Some('"') => {
+                let str = self.read_string();
+                Some(token!(TokenType::String, &str))
+            }
             Some(ch) if is_letter(ch) => {
                 let ident = self.read_identifier(ch);
                 Some(lookup_ident(&ident))
@@ -364,6 +377,9 @@ mod tests {
                 10 == 10;
                 9 != 10;
 
+                \"foobar\"
+                \"foo bar\"
+
                 "
             )
             .collect::<Vec<Token>>(),
@@ -415,6 +431,8 @@ mod tests {
                 token!(TokenType::NotEquals),
                 token!(TokenType::Int, "10"),
                 token!(TokenType::Semicolon),
+                token!(TokenType::String, "foobar"),
+                token!(TokenType::String, "foo bar"),
                 token!(TokenType::EOF),
             ],
         );
