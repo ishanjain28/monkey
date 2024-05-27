@@ -3,8 +3,9 @@ use {
     itertools::Itertools,
     std::{
         cell::RefCell,
-        collections::HashMap,
+        collections::BTreeMap,
         fmt::{self, Display, Formatter, Result as FmtResult, Write},
+        hash::{Hash, Hasher},
         rc::Rc,
     },
 };
@@ -15,16 +16,25 @@ pub trait Evaluator {
     fn eval(&self, node: Node, env: Rc<RefCell<Environment>>) -> Option<Object>;
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Environment {
-    store: HashMap<String, Object>,
-    outer: Option<Rc<RefCell<Environment>>>,
+    store: BTreeMap<String, Object>,
+    outer: Option<OuterEnvironment>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct OuterEnvironment(Rc<RefCell<Environment>>);
+
+impl Hash for OuterEnvironment {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.borrow().hash(state);
+    }
 }
 
 impl Environment {
     pub fn new() -> Self {
         Self {
-            store: HashMap::new(),
+            store: BTreeMap::new(),
             outer: None,
         }
     }
@@ -33,7 +43,7 @@ impl Environment {
             Some(v) => Some(v.clone()),
             None => match &self.outer {
                 Some(outer) => {
-                    let outer = outer.borrow();
+                    let outer = outer.0.borrow();
                     outer.get(name)
                 }
                 None => None,
@@ -44,15 +54,15 @@ impl Environment {
         self.store.insert(name, val);
     }
 
-    pub fn new_enclosed(env: Rc<RefCell<Environment>>) -> Self {
+    pub fn new_enclosed(env: OuterEnvironment) -> Self {
         Self {
-            store: HashMap::new(),
+            store: BTreeMap::new(),
             outer: Some(env),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash, Ord, PartialOrd, Eq)]
 pub enum Object {
     Integer(i64),
     String(String),
@@ -62,6 +72,7 @@ pub enum Object {
     Function(Function),
     Builtin(BuiltinFunction),
     Array(Array),
+    Hash(HashObject),
     Null,
 }
 
@@ -90,6 +101,15 @@ impl Object {
 
                 out
             }
+            Object::Hash(h) => {
+                let mut pairs = vec![];
+
+                for (k, v) in h.pairs.iter() {
+                    pairs.push(format!("{}: {}", k.inspect(), v.inspect()));
+                }
+
+                format!("{{ {} }}", pairs.join(", "))
+            }
         }
     }
 }
@@ -106,20 +126,21 @@ impl Display for Object {
             Object::Null => "NULL",
             Object::Builtin(_) => "BUILTIN",
             Object::Array(_) => "ARRAY",
+            Object::Hash(_) => "HASH",
         })
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Ord, PartialOrd, Hash)]
 pub struct Function {
     parameters: Vec<Identifier>,
     body: BlockStatement,
-    env: Rc<RefCell<Environment>>,
+    env: OuterEnvironment,
 }
 
 type Builtin = fn(Vec<Object>) -> Object;
 
-#[derive(Clone)]
+#[derive(Clone, Hash, Ord, PartialOrd, PartialEq, Eq)]
 pub struct BuiltinFunction {
     func: Box<Builtin>,
 }
@@ -132,15 +153,20 @@ impl fmt::Debug for BuiltinFunction {
     }
 }
 
-impl PartialEq for BuiltinFunction {
-    fn eq(&self, _: &Self) -> bool {
-        false
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct Array {
     elements: Vec<Object>,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd, Ord, Eq, Hash)]
+pub struct HashObject {
+    pairs: BTreeMap<Object, Object>,
+}
+
+impl HashObject {
+    fn new(ip: impl Into<BTreeMap<Object, Object>>) -> Self {
+        Self { pairs: ip.into() }
+    }
 }
 
 #[cfg(test)]
@@ -153,7 +179,7 @@ mod tests {
         parser::{ast::Node, Parser},
     };
 
-    use super::Array;
+    use super::{Array, HashObject};
     const TRUE: Object = Object::Boolean(true);
     const FALSE: Object = Object::Boolean(false);
     const NULL: Object = Object::Null;
@@ -340,6 +366,10 @@ mod tests {
                 "\"Hello\" - \"World\"",
                 Some(Object::Error("unknown operator: STRING - STRING".into())),
             ),
+            (
+                "{\"name\": \"Monkey\"}[fn(x) {x}];",
+                Some(Object::Error("unusable as hash key: FUNCTION".into())),
+            ),
         ];
 
         run_test_cases(&test_cases);
@@ -523,6 +553,51 @@ mod tests {
             ),
             ("[1,2,3][3];", Some(Object::Null)),
             ("[1,2,3][-1];", Some(Object::Null)),
+        ];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn hash_literals() {
+        let test_cases = [(
+            "let two = \"two\";
+    {
+        \"one\": 10 - 9,
+        two: 1 + 1,
+        \"thr\" + \"ee\": 6 / 2,
+        4: 4,
+        true: 5,
+        false: 6
+    }
+    ",
+            Some(Object::Hash(HashObject::new([
+                (Object::String("one".to_string()), Object::Integer(1)),
+                (Object::String("two".to_string()), Object::Integer(2)),
+                (Object::String("three".to_string()), Object::Integer(3)),
+                (Object::Integer(4), Object::Integer(4)),
+                (Object::Boolean(true), Object::Integer(5)),
+                (Object::Boolean(false), Object::Integer(6)),
+            ]))),
+        )];
+
+        run_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn hash_index_expressions() {
+        let test_cases = [
+            ("{\"foo\": 5}[\"foo\"]", Some(Object::Integer(5))),
+            ("{\"foo\": 5}[\"var\"]", Some(Object::Null)),
+            (
+                "let key = \"foo\"; {\"foo\": 5}[key]",
+                Some(Object::Integer(5)),
+            ),
+            ("{}[\"foo\"]", Some(Object::Null)),
+            ("{5: 5}[5]", Some(Object::Integer(5))),
+            ("{true: 5}[true]", Some(Object::Integer(5))),
+            ("{false: 5}[false]", Some(Object::Integer(5))),
+            ("{true: 5}[false]", Some(Object::Null)),
         ];
 
         run_test_cases(&test_cases);

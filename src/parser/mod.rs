@@ -60,6 +60,7 @@ impl<'a> Parser<'a> {
         parser.register_prefix(TokenType::If, IfExpression::parse);
         parser.register_prefix(TokenType::Function, FunctionLiteral::parse);
         parser.register_prefix(TokenType::LBracket, ArrayLiteral::parse);
+        parser.register_prefix(TokenType::LBrace, HashLiteral::parse);
 
         // Neat trick!
         // Call expressions looks like <ident>(<args>).
@@ -977,6 +978,73 @@ mod tests {
                 )),
             ))],
         )];
+
+        check_test_cases(&test_cases);
+    }
+
+    #[test]
+    fn hash_literal() {
+        let test_cases = [
+            (
+                "{\"one\": 1, \"two\": 2, \"three\": 3}",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    token!(TokenType::LBrace),
+                    Expression::HashLiteral(HashLiteral::new([
+                        (
+                            Expression::StringLiteral(StringLiteral::new("one")),
+                            Expression::IntegerLiteral(IntegerLiteral::new(1)),
+                        ),
+                        (
+                            Expression::StringLiteral(StringLiteral::new("two")),
+                            Expression::IntegerLiteral(IntegerLiteral::new(2)),
+                        ),
+                        (
+                            Expression::StringLiteral(StringLiteral::new("three")),
+                            Expression::IntegerLiteral(IntegerLiteral::new(3)),
+                        ),
+                    ])),
+                ))],
+            ),
+            (
+                "{}",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    token!(TokenType::LBrace),
+                    Expression::HashLiteral(HashLiteral::new([])),
+                ))],
+            ),
+            (
+                "{\"one\": 0 + 1, \"two\": 10-8, \"three\": 15/5}",
+                vec![Statement::ExpressionStatement(ExpressionStatement::new(
+                    token!(TokenType::LBrace),
+                    Expression::HashLiteral(HashLiteral::new([
+                        (
+                            Expression::StringLiteral(StringLiteral::new("one")),
+                            Expression::InfixExpression(InfixExpression::new(
+                                Expression::IntegerLiteral(IntegerLiteral::new(0)),
+                                TokenType::Plus,
+                                Expression::IntegerLiteral(IntegerLiteral::new(1)),
+                            )),
+                        ),
+                        (
+                            Expression::StringLiteral(StringLiteral::new("two")),
+                            Expression::InfixExpression(InfixExpression::new(
+                                Expression::IntegerLiteral(IntegerLiteral::new(10)),
+                                TokenType::Minus,
+                                Expression::IntegerLiteral(IntegerLiteral::new(8)),
+                            )),
+                        ),
+                        (
+                            Expression::StringLiteral(StringLiteral::new("three")),
+                            Expression::InfixExpression(InfixExpression::new(
+                                Expression::IntegerLiteral(IntegerLiteral::new(15)),
+                                TokenType::Slash,
+                                Expression::IntegerLiteral(IntegerLiteral::new(5)),
+                            )),
+                        ),
+                    ])),
+                ))],
+            ),
+        ];
 
         check_test_cases(&test_cases);
     }

@@ -19,7 +19,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Ord, PartialOrd, Hash)]
 pub enum TokenType {
     Illegal,
     #[allow(clippy::upper_case_acronyms)]
@@ -47,6 +47,7 @@ pub enum TokenType {
     // Delimiter
     Comma,
     Semicolon,
+    Colon,
     LParen,
     RParen,
     LBrace,
@@ -79,6 +80,7 @@ impl Display for TokenType {
             TokenType::NotEquals => "!=",
             TokenType::Comma => ",",
             TokenType::Semicolon => ";",
+            TokenType::Colon => ":",
             TokenType::LParen => "(",
             TokenType::RParen => ")",
             TokenType::LBrace => "{",
@@ -101,7 +103,7 @@ impl Display for TokenType {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Ord, PartialOrd, Hash)]
 pub struct Token {
     pub name: TokenType,
     pub literal: Option<String>,
@@ -243,6 +245,7 @@ impl<'a> Iterator for Lexer<'a> {
             Some('-') => Some(token!(TokenType::Minus)),
             Some(',') => Some(token!(TokenType::Comma)),
             Some(';') => Some(token!(TokenType::Semicolon)),
+            Some(':') => Some(token!(TokenType::Colon)),
             Some('(') => Some(token!(TokenType::LParen)),
             Some(')') => Some(token!(TokenType::RParen)),
             Some('[') => Some(token!(TokenType::LBracket)),
@@ -387,6 +390,8 @@ mod tests {
                 \"foo bar\"
                 [1,2];
 
+                {\"foo\": \"bar\"}
+
                 "
             )
             .collect::<Vec<Token>>(),
@@ -446,6 +451,11 @@ mod tests {
                 token!(TokenType::Int, "2"),
                 token!(TokenType::RBracket),
                 token!(TokenType::Semicolon),
+                token!(TokenType::LBrace),
+                token!(TokenType::String, "foo"),
+                token!(TokenType::Colon),
+                token!(TokenType::String, "bar"),
+                token!(TokenType::RBrace),
                 token!(TokenType::EOF),
             ],
         );

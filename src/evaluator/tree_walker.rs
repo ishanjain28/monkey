@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
 // TODO: This is all a mess. Almost certainly because right now, I don't know any better way to do this.
 // It's just constantly unwrapping enums from one place and rewrapping it to some other enum(or even the same enum) and returning it
@@ -7,12 +7,12 @@ use crate::{
     evaluator::{Array, Evaluator, Object},
     lexer::TokenType,
     parser::ast::{
-        BlockStatement, Expression, ExpressionStatement, Identifier, LetStatement, Node, Program,
-        Statement,
+        BlockStatement, Expression, ExpressionStatement, HashLiteral, Identifier, LetStatement,
+        Node, Program, Statement,
     },
 };
 
-use super::{builtins::BUILTINS, Environment, Function};
+use super::{builtins::BUILTINS, Environment, Function, HashObject, OuterEnvironment};
 
 pub struct TreeWalker;
 
@@ -47,9 +47,8 @@ impl Evaluator for TreeWalker {
                 Expression::Identifier(v) => self.eval_identifier(v, env),
                 Expression::IntegerLiteral(il) => Some(Object::Integer(il.value)),
                 Expression::StringLiteral(s) => Some(Object::String(s.value)),
+                Expression::HashLiteral(h) => self.eval_hash_literal(h, env),
                 Expression::ArrayLiteral(v) => {
-                    println!("{:?}", v);
-
                     let args = match self.eval_expression(v.elements, env) {
                         Ok(v) => v,
                         Err(e) => return Some(e),
@@ -76,7 +75,7 @@ impl Evaluator for TreeWalker {
                 Expression::FunctionExpression(fnl) => Some(Object::Function(Function {
                     body: fnl.body,
                     parameters: fnl.parameters,
-                    env,
+                    env: OuterEnvironment(env),
                 })),
                 Expression::CallExpression(v) => {
                     let function = self.eval(Node::Expression(*v.function), env.clone())?;
@@ -305,8 +304,11 @@ impl TreeWalker {
     }
 
     fn eval_index_expression(&self, left: Object, index: Object) -> Option<Object> {
-        match (&left, index) {
-            (Object::Array(a), Object::Integer(i)) => Some(Self::eval_array_index_expression(a, i)),
+        match (&left, &index) {
+            (Object::Array(a), Object::Integer(i)) => {
+                Some(Self::eval_array_index_expression(a, *i))
+            }
+            (Object::Hash(h), _) => self.eval_hash_index_expression(h, index),
 
             _ => Some(Object::Error(format!(
                 "index operator not supported: {}",
@@ -315,11 +317,35 @@ impl TreeWalker {
         }
     }
 
+    fn eval_hash_index_expression(&self, left: &HashObject, index: Object) -> Option<Object> {
+        Some(Object::Error(format!(
+            "index operator not supported: {:?}",
+            left
+        )))
+    }
     fn eval_array_index_expression(array: &Array, index: i64) -> Object {
         let max = array.elements.len() as i64;
         if index < 0 || index >= max {
             return Object::Null;
         }
         array.elements[index as usize].clone()
+    }
+
+    fn eval_hash_literal(
+        &self,
+        node: HashLiteral,
+        env: Rc<RefCell<Environment>>,
+    ) -> Option<Object> {
+        let mut out = BTreeMap::new();
+
+        for (k, v) in node.pairs.into_iter() {
+            let k = self.eval(Node::Expression(k), env.clone())?;
+
+            let v = self.eval(Node::Expression(v), env.clone())?;
+
+            out.insert(k, v);
+        }
+
+        Some(Object::Hash(HashObject { pairs: out }))
     }
 }
