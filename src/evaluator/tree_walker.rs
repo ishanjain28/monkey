@@ -318,10 +318,14 @@ impl TreeWalker {
     }
 
     fn eval_hash_index_expression(&self, left: &HashObject, index: Object) -> Option<Object> {
-        Some(Object::Error(format!(
-            "index operator not supported: {:?}",
-            left
-        )))
+        if let Object::Function(_) = index {
+            return Some(Object::Error(format!("unusable as hash key: {}", index)));
+        }
+
+        match left.pairs.get(&index) {
+            Some(v) => Some(v.clone()),
+            None => Some(Object::Null),
+        }
     }
     fn eval_array_index_expression(array: &Array, index: i64) -> Object {
         let max = array.elements.len() as i64;

@@ -517,6 +517,7 @@ mod tests {
                     elements: vec![Object::Integer(1), Object::Integer(5)],
                 })),
             ),
+            ("len({\"foo\": \"bar\"})", Some(Object::Integer(1))),
         ];
 
         run_test_cases(&test_cases);
