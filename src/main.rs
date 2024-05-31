@@ -8,6 +8,8 @@ mod evaluator;
 
 #[macro_use]
 mod lexer;
+mod code;
+mod compiler;
 mod parser;
 mod repl;
 
